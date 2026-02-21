@@ -11,7 +11,7 @@ struct SettingsView: View {
                     HStack {
                         Label("Server", systemImage: "desktopcomputer")
                         Spacer()
-                        Text(store.serverName)
+                        Text(store.serverName.isEmpty ? "Unknown" : store.serverName)
                             .foregroundStyle(.secondary)
                     }
                     HStack {
@@ -42,8 +42,7 @@ struct SettingsView: View {
                     HStack {
                         Label("Status", systemImage: "wifi")
                         Spacer()
-                        Text("Connected")
-                            .foregroundStyle(.green)
+                        connectionStatusView
                     }
                     HStack {
                         Label("Projects", systemImage: "folder")
@@ -51,8 +50,24 @@ struct SettingsView: View {
                         Text("\(store.projects.count)")
                             .foregroundStyle(.secondary)
                     }
+                    if let host = store.apiClient?.host, let port = store.apiClient?.port {
+                        HStack {
+                            Label("Address", systemImage: "network")
+                            Spacer()
+                            Text("\(host):\(port)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 } header: {
                     Text("Info")
+                }
+
+                if let error = store.lastError {
+                    Section {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.red)
+                    }
                 }
 
                 Section {
@@ -75,6 +90,30 @@ struct SettingsView: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    @ViewBuilder
+    private var connectionStatusView: some View {
+        switch store.connectionState {
+        case .connected:
+            Text("Connected")
+                .foregroundStyle(.green)
+        case .reconnecting(let attempt):
+            HStack(spacing: 4) {
+                ProgressView().controlSize(.mini)
+                Text("Reconnecting (\(attempt))")
+                    .foregroundStyle(.orange)
+            }
+        case .connecting:
+            HStack(spacing: 4) {
+                ProgressView().controlSize(.mini)
+                Text("Connecting")
+                    .foregroundStyle(.secondary)
+            }
+        default:
+            Text("Disconnected")
+                .foregroundStyle(.red)
+        }
     }
 }
 

@@ -19,4 +19,12 @@ struct AnnexApp: App {
             }
         }
     }
+
+    init() {
+        // Attempt to restore a previous session on launch
+        let store = _store
+        Task {
+            await store.wrappedValue.restoreSession()
+        }
+    }
 }
