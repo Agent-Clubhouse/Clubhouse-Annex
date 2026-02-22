@@ -618,6 +618,35 @@ struct AppStoreTests {
         #expect(store.agentIconURL(agentId: "agent_1") == nil)
         #expect(store.projectIconURL(projectId: "proj_1") == nil)
     }
+
+    @Test func projectIconsAccessibleForAgentProjects() {
+        let store = AppStore()
+        store.loadMockData()
+
+        // Pick an agent and find its project
+        let agent = store.allAgents.first!
+        let agentProject = store.project(for: agent)
+        #expect(agentProject != nil)
+
+        // Simulate storing icon data for that project
+        let fakeIconData = Data([0x89, 0x50, 0x4E, 0x47]) // PNG magic bytes
+        store.projectIcons[agentProject!.id] = fakeIconData
+
+        // Verify icon data is retrievable by the same project ID
+        let iconData = store.projectIcons[agentProject!.id]
+        #expect(iconData != nil)
+        #expect(iconData == fakeIconData)
+    }
+
+    @Test func projectIconsEmptyByDefault() {
+        let store = AppStore()
+        store.loadMockData()
+        // No icons fetched yet — dictionary should be empty
+        #expect(store.projectIcons.isEmpty)
+        // Looking up icon data should return nil (triggers default letter icon)
+        let project = store.projects[0]
+        #expect(store.projectIcons[project.id] == nil)
+    }
 }
 
 // MARK: - JSONValue Tests

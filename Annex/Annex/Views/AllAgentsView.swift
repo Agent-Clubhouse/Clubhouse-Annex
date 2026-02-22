@@ -22,6 +22,7 @@ struct AllAgentsView: View {
                                 ProjectIconView(
                                     name: project.name,
                                     displayName: project.displayName,
+                                    iconData: store.projectIcons[project.id],
                                     size: 18
                                 )
                                 Text(project.label)
