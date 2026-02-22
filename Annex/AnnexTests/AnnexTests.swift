@@ -701,6 +701,109 @@ struct InitialsTests {
     }
 }
 
+// MARK: - All Agents View Support Tests
+
+@MainActor
+struct AllAgentsTests {
+    @Test func allAgentsSortedByStatus() {
+        let store = AppStore()
+        store.loadMockData()
+        let agents = store.allAgents
+        // Should have all 5 agents
+        #expect(agents.count == 5)
+        // Running agents should come before sleeping/error
+        let statuses = agents.compactMap(\.status)
+        // First agents should be running
+        let firstRunningIndex = statuses.firstIndex(of: .running)
+        let firstSleepingIndex = statuses.firstIndex(of: .sleeping)
+        if let r = firstRunningIndex, let s = firstSleepingIndex {
+            #expect(r < s)
+        }
+    }
+
+    @Test func allAgentsActiveBeforeInactive() {
+        let store = AppStore()
+        store.loadMockData()
+        let agents = store.allAgents
+        // Find the boundary: all running/error agents should precede sleeping ones
+        var seenInactive = false
+        for agent in agents {
+            let isActive = agent.status == .running || agent.status == .starting
+            if !isActive {
+                seenInactive = true
+            }
+            if seenInactive && isActive {
+                Issue.record("Active agent found after inactive agent — sorting is wrong")
+            }
+        }
+    }
+
+    @Test func projectLookupFindsCorrectProject() {
+        let store = AppStore()
+        store.loadMockData()
+        let agents = store.allAgents
+        guard let firstAgent = agents.first else {
+            Issue.record("No agents found")
+            return
+        }
+        let project = store.project(for: firstAgent)
+        #expect(project != nil)
+    }
+
+    @Test func projectLookupReturnsNilForUnknown() {
+        let store = AppStore()
+        store.loadMockData()
+        let unknown = DurableAgent(
+            id: "unknown_id",
+            name: "ghost",
+            kind: "durable",
+            color: nil,
+            branch: nil,
+            model: nil,
+            orchestrator: nil,
+            freeAgentMode: nil,
+            icon: nil
+        )
+        let project = store.project(for: unknown)
+        #expect(project == nil)
+    }
+
+    @Test func statusSortOrder() {
+        let running = DurableAgent(id: "1", name: nil, kind: nil, color: nil, branch: nil, model: nil, orchestrator: nil, freeAgentMode: nil, icon: nil, status: .running)
+        let sleeping = DurableAgent(id: "2", name: nil, kind: nil, color: nil, branch: nil, model: nil, orchestrator: nil, freeAgentMode: nil, icon: nil, status: .sleeping)
+        let errored = DurableAgent(id: "3", name: nil, kind: nil, color: nil, branch: nil, model: nil, orchestrator: nil, freeAgentMode: nil, icon: nil, status: .error)
+        let completed = DurableAgent(id: "4", name: nil, kind: nil, color: nil, branch: nil, model: nil, orchestrator: nil, freeAgentMode: nil, icon: nil, status: .completed)
+        let noStatus = DurableAgent(id: "5", name: nil, kind: nil, color: nil, branch: nil, model: nil, orchestrator: nil, freeAgentMode: nil, icon: nil)
+
+        #expect(running.statusSortOrder < errored.statusSortOrder)
+        #expect(errored.statusSortOrder < sleeping.statusSortOrder)
+        #expect(sleeping.statusSortOrder < completed.statusSortOrder)
+        #expect(completed.statusSortOrder < noStatus.statusSortOrder)
+    }
+
+    @Test func allAgentsEmptyWhenNoData() {
+        let store = AppStore()
+        #expect(store.allAgents.isEmpty)
+    }
+
+    @Test func projectLookupMapsCorrectly() {
+        let store = AppStore()
+        store.loadMockData()
+        // faithful-urchin belongs to proj_001 ("My App")
+        let faithfulUrchin = store.allAgents.first { $0.name == "faithful-urchin" }
+        #expect(faithfulUrchin != nil)
+        let project = store.project(for: faithfulUrchin!)
+        #expect(project?.id == "proj_001")
+        #expect(project?.label == "My App")
+
+        // bold-eagle belongs to proj_002 ("api-server")
+        let boldEagle = store.allAgents.first { $0.name == "bold-eagle" }
+        #expect(boldEagle != nil)
+        let project2 = store.project(for: boldEagle!)
+        #expect(project2?.id == "proj_002")
+    }
+}
+
 // MARK: - AgentColor Tests
 
 struct AgentColorTests {
