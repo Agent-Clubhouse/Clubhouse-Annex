@@ -6,14 +6,7 @@ struct ProjectRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(AgentColor.color(for: project.color))
-                .frame(width: 32, height: 32)
-                .overlay {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
+            ProjectIconView(name: project.name, displayName: project.displayName)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(project.label)

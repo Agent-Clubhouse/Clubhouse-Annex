@@ -33,7 +33,8 @@ struct AgentRowView: View {
             AgentAvatarView(
                 color: agent.color ?? "gray",
                 status: agent.status,
-                state: agent.detailedStatus?.state
+                state: agent.detailedStatus?.state,
+                name: agent.name
             )
 
             VStack(alignment: .leading, spacing: 4) {

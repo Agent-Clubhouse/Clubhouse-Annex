@@ -336,6 +336,43 @@ struct ConnectionStateTests {
     }
 }
 
+// MARK: - Initials Extraction Tests
+
+struct InitialsTests {
+    @Test func agentInitialsTwoWords() {
+        #expect(agentInitials(from: "gallant-swift") == "GS")
+        #expect(agentInitials(from: "bold-falcon") == "BF")
+        #expect(agentInitials(from: "lucky-mantis") == "LM")
+    }
+
+    @Test func agentInitialsSingleWord() {
+        #expect(agentInitials(from: "agent") == "A")
+    }
+
+    @Test func agentInitialsEmpty() {
+        #expect(agentInitials(from: "") == "")
+        #expect(agentInitials(from: nil) == "")
+    }
+
+    @Test func agentInitialsThreeWords() {
+        #expect(agentInitials(from: "big-red-fox") == "BR")
+    }
+
+    @Test func projectInitialFromDisplayName() {
+        #expect(projectInitial(from: "My App", name: "my-app") == "M")
+        #expect(projectInitial(from: "SourceKit", name: "sourcekit") == "S")
+    }
+
+    @Test func projectInitialFallsBackToName() {
+        #expect(projectInitial(from: nil, name: "my-app") == "M")
+        #expect(projectInitial(from: nil, name: "SourceKit") == "S")
+    }
+
+    @Test func projectInitialEmptyName() {
+        #expect(projectInitial(from: nil, name: "") == "")
+    }
+}
+
 // MARK: - AgentColor Tests
 
 struct AgentColorTests {

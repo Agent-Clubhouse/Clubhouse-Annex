@@ -1,11 +1,34 @@
 import SwiftUI
 
+// Extract 2-letter initials from hyphenated agent name
+func agentInitials(from name: String?) -> String {
+    guard let name, !name.isEmpty else { return "" }
+    let parts = name.split(separator: "-")
+    if parts.count >= 2 {
+        let first = parts[0].prefix(1).uppercased()
+        let second = parts[1].prefix(1).uppercased()
+        return first + second
+    }
+    return String(name.prefix(1)).uppercased()
+}
+
+// Extract single initial from project name
+func projectInitial(from displayName: String?, name: String) -> String {
+    let source = displayName ?? name
+    guard let first = source.first else { return "" }
+    return String(first).uppercased()
+}
+
 // Avatar with status ring — matches Clubhouse's AgentListItem
 struct AgentAvatarView: View {
     let color: String
     let status: AgentStatus?
     let state: AgentState?
+    var name: String? = nil
     var size: CGFloat = 36
+
+    @State private var ringPhase: CGFloat = 0
+    @State private var badgePulse: Bool = false
 
     private var ringColor: Color {
         switch state {
@@ -22,14 +45,83 @@ struct AgentAvatarView: View {
         }
     }
 
+    private var showErrorBadge: Bool {
+        state == .needsPermission || status == .error
+    }
+
     var body: some View {
-        Circle()
-            .fill(AgentColor.color(for: color))
+        ZStack(alignment: .topTrailing) {
+            Circle()
+                .fill(AgentColor.color(for: color))
+                .frame(width: size, height: size)
+                .overlay(
+                    Text(agentInitials(from: name))
+                        .font(.system(size: size * 0.36, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(ringColor, lineWidth: 2.5)
+                        .frame(width: size + 4, height: size + 4)
+                        .opacity(state == .working ? (0.6 + 0.4 * sin(ringPhase)) : 1)
+                )
+
+            if showErrorBadge {
+                Circle()
+                    .fill(.red)
+                    .frame(width: size * 0.3, height: size * 0.3)
+                    .overlay(
+                        Image(systemName: "exclamationmark")
+                            .font(.system(size: size * 0.16, weight: .bold))
+                            .foregroundStyle(.white)
+                    )
+                    .scaleEffect(state == .needsPermission && badgePulse ? 1.2 : 1.0)
+                    .offset(x: size * 0.06, y: -size * 0.06)
+            }
+        }
+        .onAppear {
+            if state == .working {
+                withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+                    ringPhase = .pi * 2
+                }
+            }
+            if state == .needsPermission {
+                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    badgePulse = true
+                }
+            }
+        }
+        .onChange(of: state) { _, newState in
+            ringPhase = 0
+            badgePulse = false
+            if newState == .working {
+                withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+                    ringPhase = .pi * 2
+                }
+            }
+            if newState == .needsPermission {
+                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    badgePulse = true
+                }
+            }
+        }
+    }
+}
+
+// Dark rounded square with single initial — matches Clubhouse project icons
+struct ProjectIconView: View {
+    let name: String
+    let displayName: String?
+    var size: CGFloat = 32
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: size * 0.2)
+            .fill(Color(white: 0.22))
             .frame(width: size, height: size)
             .overlay(
-                Circle()
-                    .strokeBorder(ringColor, lineWidth: 2.5)
-                    .frame(width: size + 4, height: size + 4)
+                Text(projectInitial(from: displayName, name: name))
+                    .font(.system(size: size * 0.48, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
             )
     }
 }
@@ -106,9 +198,13 @@ enum ModelColors {
 #Preview {
     VStack(spacing: 16) {
         HStack(spacing: 12) {
-            AgentAvatarView(color: "emerald", status: .running, state: .working)
-            AgentAvatarView(color: "rose", status: .sleeping, state: nil)
-            AgentAvatarView(color: "amber", status: .error, state: .toolError)
+            AgentAvatarView(color: "emerald", status: .running, state: .working, name: "gallant-swift")
+            AgentAvatarView(color: "rose", status: .sleeping, state: nil, name: "bold-falcon")
+            AgentAvatarView(color: "amber", status: .error, state: .needsPermission, name: "lucky-mantis")
+        }
+        HStack(spacing: 12) {
+            ProjectIconView(name: "my-app", displayName: nil)
+            ProjectIconView(name: "SourceKit", displayName: "SourceKit")
         }
         HStack(spacing: 8) {
             ChipView(text: "CC", bg: Color(hex: "#fb923c").opacity(0.2), fg: Color(hex: "#fb923c"))
