@@ -40,6 +40,7 @@ struct AgentDetailView: View {
                     color: agent.color ?? "gray",
                     status: agent.status,
                     state: agent.detailedStatus?.state,
+                    name: agent.name,
                     size: 40
                 )
 
