@@ -6,7 +6,16 @@ struct AnnexApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if store.isPaired {
+            if !store.hasCompletedOnboarding {
+                WelcomeView {
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        store.completeOnboarding()
+                    }
+                }
+                .environment(store)
+                .tint(store.theme.accentColor)
+                .preferredColorScheme(store.theme.isDark ? .dark : .light)
+            } else if store.isPaired {
                 RootNavigationView()
                     .environment(store)
                     .tint(store.theme.accentColor)
