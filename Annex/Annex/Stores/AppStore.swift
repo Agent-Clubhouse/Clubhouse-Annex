@@ -56,6 +56,25 @@ enum ConnectionState: Sendable {
         agentsByProject[project.id] ?? []
     }
 
+    /// All durable agents across every project, sorted by status (active first).
+    var allAgents: [DurableAgent] {
+        agentsByProject.values
+            .flatMap { $0 }
+            .sorted { lhs, rhs in
+                lhs.statusSortOrder < rhs.statusSortOrder
+            }
+    }
+
+    /// Look up the project that owns a given agent.
+    func project(for agent: DurableAgent) -> Project? {
+        for project in projects {
+            if agentsByProject[project.id]?.contains(where: { $0.id == agent.id }) == true {
+                return project
+            }
+        }
+        return nil
+    }
+
     func allQuickAgents(for project: Project) -> [QuickAgent] {
         // Merge project-level quick agents with those nested under durable agents
         let nested = agents(for: project).flatMap { $0.quickAgents ?? [] }
