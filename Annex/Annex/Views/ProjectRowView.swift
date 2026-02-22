@@ -3,10 +3,15 @@ import SwiftUI
 struct ProjectRowView: View {
     let project: Project
     let agentCount: Int
+    @Environment(AppStore.self) private var store
 
     var body: some View {
         HStack(spacing: 12) {
-            ProjectIconView(name: project.name, displayName: project.displayName)
+            ProjectIconView(
+                name: project.name,
+                displayName: project.displayName,
+                iconURL: project.icon != nil ? store.projectIconURL(projectId: project.id) : nil
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(project.label)
@@ -23,8 +28,11 @@ struct ProjectRowView: View {
 }
 
 #Preview {
-    List {
+    let store = AppStore()
+    store.loadMockData()
+    return List {
         ProjectRowView(project: MockData.projects[0], agentCount: 2)
         ProjectRowView(project: MockData.projects[1], agentCount: 3)
     }
+    .environment(store)
 }

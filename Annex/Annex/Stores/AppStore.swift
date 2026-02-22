@@ -382,6 +382,18 @@ enum ConnectionState: Sendable {
         _ = try await apiClient.sendMessage(agentId: agentId, request: request, token: token)
     }
 
+    // MARK: - Icon URLs
+
+    func agentIconURL(agentId: String) -> URL? {
+        guard let apiClient, let token else { return nil }
+        return URL(string: "\(apiClient.baseURL)/api/v1/icons/agent/\(agentId)?token=\(token)")
+    }
+
+    func projectIconURL(projectId: String) -> URL? {
+        guard let apiClient, let token else { return nil }
+        return URL(string: "\(apiClient.baseURL)/api/v1/icons/project/\(projectId)?token=\(token)")
+    }
+
     // MARK: - Onboarding
 
     func completeOnboarding() {

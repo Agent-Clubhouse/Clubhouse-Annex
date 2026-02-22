@@ -25,6 +25,7 @@ struct AgentAvatarView: View {
     let status: AgentStatus?
     let state: AgentState?
     var name: String? = nil
+    var iconURL: URL? = nil
     var size: CGFloat = 36
 
     @State private var ringPhase: CGFloat = 0
@@ -51,22 +52,42 @@ struct AgentAvatarView: View {
         state == .needsPermission || status == .error
     }
 
+    private var initialsCircle: some View {
+        Circle()
+            .fill(AgentColor.color(for: color))
+            .frame(width: size, height: size)
+            .overlay(
+                Text(agentInitials(from: name))
+                    .font(.system(size: size * 0.36, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+            )
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Circle()
-                .fill(AgentColor.color(for: color))
-                .frame(width: size, height: size)
-                .overlay(
-                    Text(agentInitials(from: name))
-                        .font(.system(size: size * 0.36, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                )
-                .overlay(
-                    Circle()
-                        .strokeBorder(ringColor, lineWidth: 2.5)
-                        .frame(width: size + 4, height: size + 4)
-                        .opacity(state == .working ? (0.6 + 0.4 * sin(Double(ringPhase))) : 1)
-                )
+            Group {
+                if let iconURL {
+                    AsyncImage(url: iconURL) { phase in
+                        if case .success(let image) = phase {
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            initialsCircle
+                        }
+                    }
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+                } else {
+                    initialsCircle
+                }
+            }
+            .overlay(
+                Circle()
+                    .strokeBorder(ringColor, lineWidth: 2.5)
+                    .frame(width: size + 4, height: size + 4)
+                    .opacity(state == .working ? (0.6 + 0.4 * sin(Double(ringPhase))) : 1)
+            )
 
             if showErrorBadge {
                 Circle()
@@ -114,9 +135,10 @@ struct AgentAvatarView: View {
 struct ProjectIconView: View {
     let name: String
     let displayName: String?
+    var iconURL: URL? = nil
     var size: CGFloat = 32
 
-    var body: some View {
+    private var initialSquare: some View {
         RoundedRectangle(cornerRadius: size * 0.2)
             .fill(Color(white: 0.22))
             .frame(width: size, height: size)
@@ -125,6 +147,25 @@ struct ProjectIconView: View {
                     .font(.system(size: size * 0.48, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             )
+    }
+
+    var body: some View {
+        if let iconURL {
+            AsyncImage(url: iconURL) { phase in
+                if case .success(let image) = phase {
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipShape(RoundedRectangle(cornerRadius: size * 0.2))
+                } else {
+                    initialSquare
+                }
+            }
+            .frame(width: size, height: size)
+        } else {
+            initialSquare
+        }
     }
 }
 

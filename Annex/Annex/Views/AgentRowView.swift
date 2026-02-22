@@ -34,7 +34,8 @@ struct AgentRowView: View {
                 color: agent.color ?? "gray",
                 status: agent.status,
                 state: agent.detailedStatus?.state,
-                name: agent.name
+                name: agent.name,
+                iconURL: agent.icon != nil ? store.agentIconURL(agentId: agent.id) : nil
             )
 
             VStack(alignment: .leading, spacing: 4) {
