@@ -39,6 +39,7 @@ enum MockData {
                         kind: "quick",
                         status: .running,
                         mission: "Fix the login bug",
+                        prompt: "Fix the login bug in src/auth/login.ts",
                         model: "claude-sonnet-4-5",
                         detailedStatus: AgentDetailedStatus(
                             state: .idle,
@@ -47,7 +48,9 @@ enum MockData {
                             timestamp: 1708531190000
                         ),
                         orchestrator: "claude-code",
-                        parentAgentId: "durable_1737000000000_abc123"
+                        parentAgentId: "durable_1737000000000_abc123",
+                        projectId: "proj_001",
+                        freeAgentMode: false
                     ),
                 ]
             ),
@@ -93,6 +96,7 @@ enum MockData {
                         kind: "quick",
                         status: .running,
                         mission: "Update API docs",
+                        prompt: "Update the API documentation in README.md",
                         model: "claude-haiku-4-5",
                         detailedStatus: AgentDetailedStatus(
                             state: .working,
@@ -101,7 +105,9 @@ enum MockData {
                             timestamp: 1708531240000
                         ),
                         orchestrator: "copilot-cli",
-                        parentAgentId: "durable_1737000000002_srv001"
+                        parentAgentId: "durable_1737000000002_srv001",
+                        projectId: "proj_002",
+                        freeAgentMode: false
                     ),
                 ]
             ),

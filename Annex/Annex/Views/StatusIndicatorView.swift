@@ -133,9 +133,12 @@ struct StatusDotView: View {
 
     private var color: Color {
         switch status {
+        case .starting: .orange
         case .running: .green
         case .sleeping: .yellow
-        case .error: .red
+        case .error, .failed: .red
+        case .completed: .blue
+        case .cancelled: .gray
         }
     }
 
