@@ -234,12 +234,36 @@ struct AppStoreTests {
     @Test func disconnect() {
         let store = AppStore()
         store.loadMockData()
+        store.completeOnboarding()
         store.disconnect()
         #expect(store.isPaired == false)
         #expect(store.projects.isEmpty)
         #expect(store.agentsByProject.isEmpty)
         #expect(store.serverName == "")
         #expect(store.connectionState.isConnected == false)
+        // Disconnect preserves onboarding state
+        #expect(store.hasCompletedOnboarding == true)
+    }
+
+    @Test func resetApp() {
+        UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+        let store = AppStore()
+        store.loadMockData()
+        store.completeOnboarding()
+        #expect(store.hasCompletedOnboarding == true)
+        store.resetApp()
+        #expect(store.isPaired == false)
+        #expect(store.projects.isEmpty)
+        #expect(store.hasCompletedOnboarding == false)
+    }
+
+    @Test func completeOnboarding() {
+        // Clear any leftover state from other tests
+        UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+        let store = AppStore()
+        #expect(store.hasCompletedOnboarding == false)
+        store.completeOnboarding()
+        #expect(store.hasCompletedOnboarding == true)
     }
 
     @Test func agentsForProject() {

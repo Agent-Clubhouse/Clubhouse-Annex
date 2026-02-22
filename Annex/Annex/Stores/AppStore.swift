@@ -33,6 +33,7 @@ enum ConnectionState: Sendable {
     var activityByAgent: [String: [HookEvent]] = [:]
     var ptyBufferByAgent: [String: String] = [:]
     var isPaired: Bool = false
+    var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
     var theme: ThemeColors = .mock
     var serverName: String = ""
     var orchestrators: [String: OrchestratorEntry] = [:]
@@ -243,11 +244,25 @@ enum ConnectionState: Sendable {
         }
     }
 
-    // MARK: - Disconnect
+    // MARK: - Onboarding
+
+    func completeOnboarding() {
+        hasCompletedOnboarding = true
+        UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+    }
+
+    // MARK: - Disconnect & Reset
 
     func disconnect() {
         disconnectInternal()
         KeychainHelper.clearAll()
+    }
+
+    /// Full reset: disconnect, clear credentials, and return to welcome screen.
+    func resetApp() {
+        disconnect()
+        hasCompletedOnboarding = false
+        UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
     }
 
     private func disconnectInternal() {

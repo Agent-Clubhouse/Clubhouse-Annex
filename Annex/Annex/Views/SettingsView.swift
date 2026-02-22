@@ -78,6 +78,17 @@ struct SettingsView: View {
                         Label("Disconnect", systemImage: "wifi.slash")
                     }
                 }
+
+                Section {
+                    Button(role: .destructive) {
+                        store.resetApp()
+                        dismiss()
+                    } label: {
+                        Label("Reset App", systemImage: "arrow.counterclockwise")
+                    }
+                } footer: {
+                    Text("Clears all data and returns to the welcome screen.")
+                }
             }
             .scrollContentBackground(.hidden)
             .background(store.theme.baseColor)
