@@ -25,7 +25,7 @@ struct AgentAvatarView: View {
     let status: AgentStatus?
     let state: AgentState?
     var name: String? = nil
-    var iconURL: URL? = nil
+    var iconData: Data? = nil
     var size: CGFloat = 36
 
     @State private var ringPhase: CGFloat = 0
@@ -66,18 +66,12 @@ struct AgentAvatarView: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Group {
-                if let iconURL {
-                    AsyncImage(url: iconURL) { phase in
-                        if case .success(let image) = phase {
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            initialsCircle
-                        }
-                    }
-                    .frame(width: size, height: size)
-                    .clipShape(Circle())
+                if let iconData, let uiImage = UIImage(data: iconData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipShape(Circle())
                 } else {
                     initialsCircle
                 }
@@ -135,7 +129,7 @@ struct AgentAvatarView: View {
 struct ProjectIconView: View {
     let name: String
     let displayName: String?
-    var iconURL: URL? = nil
+    var iconData: Data? = nil
     var size: CGFloat = 32
 
     private var initialSquare: some View {
@@ -150,19 +144,12 @@ struct ProjectIconView: View {
     }
 
     var body: some View {
-        if let iconURL {
-            AsyncImage(url: iconURL) { phase in
-                if case .success(let image) = phase {
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: size, height: size)
-                        .clipShape(RoundedRectangle(cornerRadius: size * 0.2))
-                } else {
-                    initialSquare
-                }
-            }
-            .frame(width: size, height: size)
+        if let iconData, let uiImage = UIImage(data: iconData) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.2))
         } else {
             initialSquare
         }

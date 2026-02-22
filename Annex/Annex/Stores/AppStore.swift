@@ -200,6 +200,7 @@ enum ConnectionState: Sendable {
             ptyBufferByAgent = [:]
             connectionState = .connected
             isPaired = true
+            Task { await fetchIcons() }
 
         case .ptyData(let payload):
             var buf = ptyBufferByAgent[payload.agentId] ?? ""
@@ -428,7 +429,10 @@ enum ConnectionState: Sendable {
         _ = try await apiClient.sendMessage(agentId: agentId, request: request, token: token)
     }
 
-    // MARK: - Icon URLs
+    // MARK: - Icon Cache
+
+    var agentIcons: [String: Data] = [:]
+    var projectIcons: [String: Data] = [:]
 
     func agentIconURL(agentId: String) -> URL? {
         guard let apiClient, let token else { return nil }
@@ -438,6 +442,28 @@ enum ConnectionState: Sendable {
     func projectIconURL(projectId: String) -> URL? {
         guard let apiClient, let token else { return nil }
         return URL(string: "\(apiClient.baseURL)/api/v1/icons/project/\(projectId)?token=\(token)")
+    }
+
+    func fetchIcons() async {
+        guard let apiClient, let token else { return }
+
+        // Fetch agent icons for agents that have an icon field set
+        for agents in agentsByProject.values {
+            for agent in agents where agent.icon != nil {
+                if agentIcons[agent.id] != nil { continue }
+                if let data = await apiClient.fetchAgentIcon(agentId: agent.id, token: token) {
+                    agentIcons[agent.id] = data
+                }
+            }
+        }
+
+        // Fetch project icons for projects that have an icon field set
+        for project in projects where project.icon != nil {
+            if projectIcons[project.id] != nil { continue }
+            if let data = await apiClient.fetchProjectIcon(projectId: project.id, token: token) {
+                projectIcons[project.id] = data
+            }
+        }
     }
 
     // MARK: - Onboarding
@@ -473,6 +499,8 @@ enum ConnectionState: Sendable {
         quickAgentsByProject = [:]
         activityByAgent = [:]
         ptyBufferByAgent = [:]
+        agentIcons = [:]
+        projectIcons = [:]
         serverName = ""
         orchestrators = [:]
         token = nil

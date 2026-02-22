@@ -10,7 +10,7 @@ struct ProjectRowView: View {
             ProjectIconView(
                 name: project.name,
                 displayName: project.displayName,
-                iconURL: project.icon != nil ? store.projectIconURL(projectId: project.id) : nil
+                iconData: store.projectIcons[project.id]
             )
 
             VStack(alignment: .leading, spacing: 2) {
