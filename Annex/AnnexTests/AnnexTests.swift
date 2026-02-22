@@ -591,6 +591,33 @@ struct AppStoreTests {
         store.disconnect()
         #expect(store.quickAgentsByProject.isEmpty)
     }
+
+    @Test func removeQuickAgent() {
+        let store = AppStore()
+        let qa1 = QuickAgent(id: "q1", name: nil, kind: "quick", status: .completed, mission: nil, prompt: "task 1", model: nil, detailedStatus: nil, orchestrator: nil, parentAgentId: nil, projectId: "proj_001", freeAgentMode: nil)
+        let qa2 = QuickAgent(id: "q2", name: nil, kind: "quick", status: .running, mission: nil, prompt: "task 2", model: nil, detailedStatus: nil, orchestrator: nil, parentAgentId: nil, projectId: "proj_001", freeAgentMode: nil)
+        store.quickAgentsByProject["proj_001"] = [qa1, qa2]
+
+        store.removeQuickAgent(agentId: "q1")
+        #expect(store.quickAgentsByProject["proj_001"]?.count == 1)
+        #expect(store.quickAgentsByProject["proj_001"]?[0].id == "q2")
+    }
+
+    @Test func removeQuickAgentNonexistent() {
+        let store = AppStore()
+        let qa = QuickAgent(id: "q1", name: nil, kind: "quick", status: .running, mission: nil, prompt: "test", model: nil, detailedStatus: nil, orchestrator: nil, parentAgentId: nil, projectId: "proj_001", freeAgentMode: nil)
+        store.quickAgentsByProject["proj_001"] = [qa]
+
+        store.removeQuickAgent(agentId: "nonexistent")
+        #expect(store.quickAgentsByProject["proj_001"]?.count == 1)
+    }
+
+    @Test func iconURLsRequireConnection() {
+        let store = AppStore()
+        // No apiClient or token set — should return nil
+        #expect(store.agentIconURL(agentId: "agent_1") == nil)
+        #expect(store.projectIconURL(projectId: "proj_1") == nil)
+    }
 }
 
 // MARK: - JSONValue Tests
