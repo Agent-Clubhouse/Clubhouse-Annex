@@ -63,7 +63,7 @@ struct AgentAvatarView: View {
                     Circle()
                         .strokeBorder(ringColor, lineWidth: 2.5)
                         .frame(width: size + 4, height: size + 4)
-                        .opacity(state == .working ? (0.6 + 0.4 * sin(ringPhase)) : 1)
+                        .opacity(state == .working ? (0.6 + 0.4 * sin(Double(ringPhase))) : 1)
                 )
 
             if showErrorBadge {
