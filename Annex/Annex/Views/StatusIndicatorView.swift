@@ -37,9 +37,11 @@ struct AgentAvatarView: View {
         case .toolError: .yellow
         default:
             switch status {
-            case .running: .green
+            case .starting, .running: .green
             case .sleeping: .gray
-            case .error: .red
+            case .error, .failed: .red
+            case .completed: .blue
+            case .cancelled: .gray
             case nil: .gray
             }
         }
