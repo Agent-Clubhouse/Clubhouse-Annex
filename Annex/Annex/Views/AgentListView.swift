@@ -3,6 +3,7 @@ import SwiftUI
 struct AgentListView: View {
     let project: Project
     @Environment(AppStore.self) private var store
+    @State private var showSpawnSheet = false
 
     private var durableAgents: [DurableAgent] {
         store.agents(for: project)
@@ -28,8 +29,10 @@ struct AgentListView: View {
             if !quickAgents.isEmpty {
                 Section("Quick Tasks") {
                     ForEach(quickAgents) { agent in
-                        QuickAgentRowView(agent: agent)
-                            .listRowBackground(store.theme.surface0Color.opacity(0.5))
+                        NavigationLink(value: agent) {
+                            QuickAgentRowView(agent: agent)
+                        }
+                        .listRowBackground(store.theme.surface0Color.opacity(0.5))
                     }
                 }
             }
@@ -40,6 +43,25 @@ struct AgentListView: View {
         .navigationTitle(project.label)
         .navigationDestination(for: DurableAgent.self) { agent in
             AgentDetailView(agent: agent)
+        }
+        .navigationDestination(for: QuickAgent.self) { agent in
+            QuickAgentDetailView(agent: agent)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showSpawnSheet = true
+                } label: {
+                    Label("New Quick Agent", systemImage: "bolt.badge.plus")
+                }
+            }
+        }
+        .sheet(isPresented: $showSpawnSheet) {
+            SpawnQuickAgentSheet(
+                projectId: project.id,
+                parentAgentId: nil,
+                orchestrators: store.orchestrators
+            )
         }
     }
 }

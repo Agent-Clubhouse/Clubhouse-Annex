@@ -3,6 +3,9 @@ import SwiftUI
 struct AgentDetailView: View {
     let agent: DurableAgent
     @Environment(AppStore.self) private var store
+    @State private var showWakeSheet = false
+    @State private var showMessageSheet = false
+    @State private var showSpawnSheet = false
 
     private var stateMessage: String {
         guard let ds = agent.detailedStatus else {
@@ -24,6 +27,13 @@ struct AgentDetailView: View {
         case .needsPermission: return .orange
         case .toolError: return .red
         }
+    }
+
+    private func projectIdForAgent(_ agent: DurableAgent) -> String {
+        for (projectId, agents) in store.agentsByProject {
+            if agents.contains(where: { $0.id == agent.id }) { return projectId }
+        }
+        return ""
     }
 
     private var orchestratorLabel: String? {
@@ -98,12 +108,47 @@ struct AgentDetailView: View {
         .navigationTitle(agent.name ?? agent.id)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if agent.status == .sleeping {
+                    Button {
+                        showWakeSheet = true
+                    } label: {
+                        Label("Wake", systemImage: "alarm")
+                    }
+                }
+
+                if agent.status == .running {
+                    Button {
+                        showMessageSheet = true
+                    } label: {
+                        Label("Message", systemImage: "text.bubble")
+                    }
+
+                    Button {
+                        showSpawnSheet = true
+                    } label: {
+                        Label("Quick Agent", systemImage: "bolt.badge.plus")
+                    }
+                }
+
                 NavigationLink(value: "live:\(agent.id)") {
                     Label("See Live", systemImage: "terminal")
                         .font(.caption)
                 }
             }
+        }
+        .sheet(isPresented: $showWakeSheet) {
+            WakeAgentSheet(agent: agent)
+        }
+        .sheet(isPresented: $showMessageSheet) {
+            SendMessageSheet(agent: agent)
+        }
+        .sheet(isPresented: $showSpawnSheet) {
+            SpawnQuickAgentSheet(
+                projectId: projectIdForAgent(agent),
+                parentAgentId: agent.id,
+                orchestrators: store.orchestrators
+            )
         }
         .navigationDestination(for: String.self) { value in
             if value.hasPrefix("live:") {

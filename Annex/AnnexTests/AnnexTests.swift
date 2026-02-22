@@ -193,6 +193,274 @@ struct HookEventKindTests {
     }
 }
 
+// MARK: - QuickAgent Model Tests
+
+struct QuickAgentTests {
+    @Test func decodeQuickAgentMinimal() throws {
+        let json = """
+        {"id":"quick_001","kind":"quick"}
+        """
+        let agent = try JSONDecoder().decode(QuickAgent.self, from: Data(json.utf8))
+        #expect(agent.id == "quick_001")
+        #expect(agent.kind == "quick")
+        #expect(agent.name == nil)
+        #expect(agent.prompt == nil)
+        #expect(agent.summary == nil)
+    }
+
+    @Test func decodeQuickAgentFull() throws {
+        let json = """
+        {"id":"quick_001","name":"quick-agent-1","kind":"quick","status":"running","mission":"Fix bug","prompt":"Fix the login bug","model":"claude-sonnet-4-5","orchestrator":"claude-code","parentAgentId":"durable_001","projectId":"proj_001","freeAgentMode":false}
+        """
+        let agent = try JSONDecoder().decode(QuickAgent.self, from: Data(json.utf8))
+        #expect(agent.id == "quick_001")
+        #expect(agent.name == "quick-agent-1")
+        #expect(agent.status == .running)
+        #expect(agent.prompt == "Fix the login bug")
+        #expect(agent.model == "claude-sonnet-4-5")
+        #expect(agent.parentAgentId == "durable_001")
+        #expect(agent.projectId == "proj_001")
+        #expect(agent.freeAgentMode == false)
+    }
+
+    @Test func decodeQuickAgentWithCompletionData() throws {
+        let json = """
+        {"id":"quick_001","kind":"quick","status":"completed","summary":"Fixed the bug","filesModified":["src/main.ts","src/test.ts"],"durationMs":45200,"costUsd":0.12,"toolsUsed":["Read","Edit","Bash"]}
+        """
+        let agent = try JSONDecoder().decode(QuickAgent.self, from: Data(json.utf8))
+        #expect(agent.status == .completed)
+        #expect(agent.summary == "Fixed the bug")
+        #expect(agent.filesModified == ["src/main.ts", "src/test.ts"])
+        #expect(agent.durationMs == 45200)
+        #expect(agent.costUsd == 0.12)
+        #expect(agent.toolsUsed == ["Read", "Edit", "Bash"])
+    }
+
+    @Test func quickAgentLabel() {
+        let withName = QuickAgent(id: "q1", name: "my-agent", kind: "quick", status: nil, mission: nil, prompt: "some prompt", model: nil, detailedStatus: nil, orchestrator: nil, parentAgentId: nil, projectId: nil, freeAgentMode: nil)
+        #expect(withName.label == "my-agent")
+
+        let withPrompt = QuickAgent(id: "q2", name: nil, kind: "quick", status: nil, mission: nil, prompt: "Fix the auth flow in the login page", model: nil, detailedStatus: nil, orchestrator: nil, parentAgentId: nil, projectId: nil, freeAgentMode: nil)
+        #expect(withPrompt.label == "Fix the auth flow in the login page")
+
+        let idOnly = QuickAgent(id: "q3", name: nil, kind: "quick", status: nil, mission: nil, prompt: nil, model: nil, detailedStatus: nil, orchestrator: nil, parentAgentId: nil, projectId: nil, freeAgentMode: nil)
+        #expect(idOnly.label == "q3")
+    }
+}
+
+// MARK: - Agent Status Tests
+
+struct AgentStatusTests {
+    @Test func decodeAllStatuses() throws {
+        let statuses: [(String, AgentStatus)] = [
+            ("\"starting\"", .starting),
+            ("\"running\"", .running),
+            ("\"sleeping\"", .sleeping),
+            ("\"error\"", .error),
+            ("\"completed\"", .completed),
+            ("\"failed\"", .failed),
+            ("\"cancelled\"", .cancelled),
+        ]
+        for (json, expected) in statuses {
+            let decoded = try JSONDecoder().decode(AgentStatus.self, from: Data(json.utf8))
+            #expect(decoded == expected)
+        }
+    }
+}
+
+// MARK: - Request/Response Model Tests
+
+struct AgentActionModelTests {
+    @Test func encodeSpawnQuickAgentRequest() throws {
+        let request = SpawnQuickAgentRequest(
+            prompt: "Fix the bug",
+            orchestrator: "claude-code",
+            model: "claude-sonnet-4-5",
+            freeAgentMode: false,
+            systemPrompt: nil
+        )
+        let data = try JSONEncoder().encode(request)
+        let decoded = try JSONDecoder().decode(SpawnQuickAgentRequest.self, from: data)
+        #expect(decoded.prompt == "Fix the bug")
+        #expect(decoded.orchestrator == "claude-code")
+        #expect(decoded.model == "claude-sonnet-4-5")
+        #expect(decoded.freeAgentMode == false)
+        #expect(decoded.systemPrompt == nil)
+    }
+
+    @Test func encodeWakeAgentRequest() throws {
+        let request = WakeAgentRequest(message: "Rebase on main", model: "claude-opus-4-5")
+        let data = try JSONEncoder().encode(request)
+        let decoded = try JSONDecoder().decode(WakeAgentRequest.self, from: data)
+        #expect(decoded.message == "Rebase on main")
+        #expect(decoded.model == "claude-opus-4-5")
+    }
+
+    @Test func encodeWakeAgentRequestNoModel() throws {
+        let request = WakeAgentRequest(message: "Fix tests", model: nil)
+        let data = try JSONEncoder().encode(request)
+        let decoded = try JSONDecoder().decode(WakeAgentRequest.self, from: data)
+        #expect(decoded.message == "Fix tests")
+        #expect(decoded.model == nil)
+    }
+
+    @Test func encodeSendMessageRequest() throws {
+        let request = SendMessageRequest(message: "Also update the README")
+        let data = try JSONEncoder().encode(request)
+        let decoded = try JSONDecoder().decode(SendMessageRequest.self, from: data)
+        #expect(decoded.message == "Also update the README")
+    }
+
+    @Test func decodeSpawnQuickAgentResponse() throws {
+        let json = """
+        {"id":"quick_001","name":"quick-agent-1","kind":"quick","status":"starting","prompt":"Fix bug","model":"claude-sonnet-4-5","orchestrator":"claude-code","freeAgentMode":false,"parentAgentId":null,"projectId":"proj_001"}
+        """
+        let response = try JSONDecoder().decode(SpawnQuickAgentResponse.self, from: Data(json.utf8))
+        #expect(response.id == "quick_001")
+        #expect(response.kind == "quick")
+        #expect(response.status == "starting")
+        #expect(response.prompt == "Fix bug")
+        #expect(response.projectId == "proj_001")
+        #expect(response.parentAgentId == nil)
+    }
+
+    @Test func decodeWakeAgentResponse() throws {
+        let json = """
+        {"id":"durable_001","name":"faithful-urchin","kind":"durable","color":"emerald","status":"starting","branch":"faithful-urchin/standby","model":"claude-sonnet-4-5","orchestrator":"claude-code","freeAgentMode":false,"icon":null,"detailedStatus":null}
+        """
+        let response = try JSONDecoder().decode(WakeAgentResponse.self, from: Data(json.utf8))
+        #expect(response.id == "durable_001")
+        #expect(response.status == "starting")
+        #expect(response.name == "faithful-urchin")
+        #expect(response.detailedStatus == nil)
+    }
+
+    @Test func decodeCancelAgentResponse() throws {
+        let json = """
+        {"id":"quick_001","status":"cancelled"}
+        """
+        let response = try JSONDecoder().decode(CancelAgentResponse.self, from: Data(json.utf8))
+        #expect(response.id == "quick_001")
+        #expect(response.status == "cancelled")
+    }
+
+    @Test func decodeSendMessageResponse() throws {
+        let json = """
+        {"id":"durable_001","status":"running","delivered":true}
+        """
+        let response = try JSONDecoder().decode(SendMessageResponse.self, from: Data(json.utf8))
+        #expect(response.id == "durable_001")
+        #expect(response.delivered == true)
+    }
+}
+
+// MARK: - New WebSocket Payload Tests
+
+struct AgentWSPayloadTests {
+    @Test func decodeAgentSpawnedPayload() throws {
+        let json = """
+        {"type":"agent:spawned","payload":{"id":"quick_001","kind":"quick","status":"starting","prompt":"Fix bug","model":"claude-sonnet-4-5","orchestrator":"claude-code","freeAgentMode":false,"parentAgentId":"durable_001","projectId":"proj_001"}}
+        """
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let msg = try JSONDecoder().decode(PayloadExtractor<AgentSpawnedPayload>.self, from: Data(json.utf8))
+        #expect(msg.payload.id == "quick_001")
+        #expect(msg.payload.kind == "quick")
+        #expect(msg.payload.status == "starting")
+        #expect(msg.payload.prompt == "Fix bug")
+        #expect(msg.payload.parentAgentId == "durable_001")
+        #expect(msg.payload.projectId == "proj_001")
+    }
+
+    @Test func decodeAgentStatusPayload() throws {
+        let json = """
+        {"type":"agent:status","payload":{"id":"quick_001","kind":"quick","status":"running","projectId":"proj_001","parentAgentId":"durable_001"}}
+        """
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let msg = try JSONDecoder().decode(PayloadExtractor<AgentStatusPayload>.self, from: Data(json.utf8))
+        #expect(msg.payload.id == "quick_001")
+        #expect(msg.payload.status == "running")
+        #expect(msg.payload.projectId == "proj_001")
+    }
+
+    @Test func decodeAgentCompletedPayload() throws {
+        let json = """
+        {"type":"agent:completed","payload":{"id":"quick_001","kind":"quick","status":"completed","exitCode":0,"projectId":"proj_001","parentAgentId":null,"summary":"Fixed the bug","filesModified":["src/main.ts"],"durationMs":45200,"costUsd":0.12,"toolsUsed":["Read","Edit"]}}
+        """
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let msg = try JSONDecoder().decode(PayloadExtractor<AgentCompletedPayload>.self, from: Data(json.utf8))
+        #expect(msg.payload.id == "quick_001")
+        #expect(msg.payload.status == "completed")
+        #expect(msg.payload.exitCode == 0)
+        #expect(msg.payload.summary == "Fixed the bug")
+        #expect(msg.payload.filesModified == ["src/main.ts"])
+        #expect(msg.payload.durationMs == 45200)
+        #expect(msg.payload.costUsd == 0.12)
+        #expect(msg.payload.toolsUsed == ["Read", "Edit"])
+    }
+
+    @Test func decodeAgentCompletedPayloadMinimal() throws {
+        let json = """
+        {"type":"agent:completed","payload":{"id":"quick_001","kind":"quick","status":"failed","exitCode":1,"projectId":"proj_001"}}
+        """
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let msg = try JSONDecoder().decode(PayloadExtractor<AgentCompletedPayload>.self, from: Data(json.utf8))
+        #expect(msg.payload.status == "failed")
+        #expect(msg.payload.exitCode == 1)
+        #expect(msg.payload.summary == nil)
+        #expect(msg.payload.filesModified == nil)
+    }
+
+    @Test func decodeAgentWokenPayload() throws {
+        let json = """
+        {"type":"agent:woken","payload":{"agentId":"durable_001","message":"Rebase on main","source":"annex"}}
+        """
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let msg = try JSONDecoder().decode(PayloadExtractor<AgentWokenPayload>.self, from: Data(json.utf8))
+        #expect(msg.payload.agentId == "durable_001")
+        #expect(msg.payload.message == "Rebase on main")
+        #expect(msg.payload.source == "annex")
+    }
+
+    @Test func decodeSnapshotWithQuickAgents() throws {
+        let json = """
+        {
+            "type": "snapshot",
+            "payload": {
+                "projects": [{"id":"p1","name":"test","path":"/test","color":null,"icon":null,"displayName":null,"orchestrator":null}],
+                "agents": {},
+                "quickAgents": {
+                    "p1": [{"id":"quick_001","kind":"quick","status":"running","prompt":"Fix bug","model":"claude-sonnet-4-5","projectId":"p1"}]
+                },
+                "theme": {"base":"#1e1e2e","mantle":"#181825","crust":"#11111b","text":"#cdd6f4","subtext0":"#a6adc8","subtext1":"#bac2de","surface0":"#313244","surface1":"#45475a","surface2":"#585b70","accent":"#89b4fa","link":"#89b4fa"},
+                "orchestrators": {}
+            }
+        }
+        """
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let snapshot = try JSONDecoder().decode(PayloadExtractor<SnapshotPayload>.self, from: Data(json.utf8))
+        #expect(snapshot.payload.quickAgents?["p1"]?.count == 1)
+        #expect(snapshot.payload.quickAgents?["p1"]?[0].id == "quick_001")
+        #expect(snapshot.payload.quickAgents?["p1"]?[0].prompt == "Fix bug")
+    }
+
+    @Test func decodeSnapshotWithoutQuickAgents() throws {
+        let json = """
+        {
+            "type": "snapshot",
+            "payload": {
+                "projects": [],
+                "agents": {},
+                "theme": {"base":"#1e1e2e","mantle":"#181825","crust":"#11111b","text":"#cdd6f4","subtext0":"#a6adc8","subtext1":"#bac2de","surface0":"#313244","surface1":"#45475a","surface2":"#585b70","accent":"#89b4fa","link":"#89b4fa"},
+                "orchestrators": {}
+            }
+        }
+        """
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let snapshot = try JSONDecoder().decode(PayloadExtractor<SnapshotPayload>.self, from: Data(json.utf8))
+        #expect(snapshot.payload.quickAgents == nil)
+    }
+}
+
 // MARK: - API Client Tests
 
 struct APIClientTests {
@@ -286,6 +554,42 @@ struct AppStoreTests {
         store.loadMockData()
         #expect(store.runningAgentCount > 0)
         #expect(store.runningAgentCount <= store.totalAgentCount)
+    }
+
+    @Test func quickAgentsForProject() {
+        let store = AppStore()
+        store.loadMockData()
+        let proj = store.projects[0] // proj_001
+        let quickAgents = store.allQuickAgents(for: proj)
+        // proj_001 has one quick agent nested under faithful-urchin
+        #expect(!quickAgents.isEmpty)
+        #expect(quickAgents[0].id == "quick_1737000100000_def456")
+    }
+
+    @Test func quickAgentsDeduplication() {
+        let store = AppStore()
+        store.loadMockData()
+        let proj = store.projects[0]
+
+        // Add the same quick agent to standalone list
+        let qa = QuickAgent(id: "quick_1737000100000_def456", name: "quick-agent-1", kind: "quick", status: .running, mission: nil, prompt: "Fix bug", model: nil, detailedStatus: nil, orchestrator: nil, parentAgentId: nil, projectId: "proj_001", freeAgentMode: nil)
+        store.quickAgentsByProject["proj_001"] = [qa]
+
+        let all = store.allQuickAgents(for: proj)
+        // Should deduplicate — only one entry for the same ID
+        let ids = all.map(\.id)
+        let uniqueIds = Set(ids)
+        #expect(ids.count == uniqueIds.count)
+    }
+
+    @Test func disconnectClearsQuickAgents() {
+        let store = AppStore()
+        store.loadMockData()
+        let qa = QuickAgent(id: "q1", name: nil, kind: "quick", status: .running, mission: nil, prompt: "test", model: nil, detailedStatus: nil, orchestrator: nil, parentAgentId: nil, projectId: "proj_001", freeAgentMode: nil)
+        store.quickAgentsByProject["proj_001"] = [qa]
+        #expect(!store.quickAgentsByProject.isEmpty)
+        store.disconnect()
+        #expect(store.quickAgentsByProject.isEmpty)
     }
 }
 

@@ -30,6 +30,7 @@ enum ConnectionState: Sendable {
 
     var projects: [Project] = []
     var agentsByProject: [String: [DurableAgent]] = [:]
+    var quickAgentsByProject: [String: [QuickAgent]] = [:]
     var activityByAgent: [String: [HookEvent]] = [:]
     var ptyBufferByAgent: [String: String] = [:]
     var isPaired: Bool = false
@@ -56,7 +57,31 @@ enum ConnectionState: Sendable {
     }
 
     func allQuickAgents(for project: Project) -> [QuickAgent] {
-        agents(for: project).flatMap { $0.quickAgents ?? [] }
+        // Merge project-level quick agents with those nested under durable agents
+        let nested = agents(for: project).flatMap { $0.quickAgents ?? [] }
+        let standalone = quickAgentsByProject[project.id] ?? []
+        // Deduplicate by ID, preferring standalone (more up-to-date from WS events)
+        var seen = Set<String>()
+        var result: [QuickAgent] = []
+        for agent in standalone {
+            if seen.insert(agent.id).inserted { result.append(agent) }
+        }
+        for agent in nested {
+            if seen.insert(agent.id).inserted { result.append(agent) }
+        }
+        return result
+    }
+
+    func quickAgent(byId id: String) -> QuickAgent? {
+        for agents in quickAgentsByProject.values {
+            if let agent = agents.first(where: { $0.id == id }) { return agent }
+        }
+        for agents in agentsByProject.values {
+            for durable in agents {
+                if let qa = durable.quickAgents?.first(where: { $0.id == id }) { return qa }
+            }
+        }
+        return nil
     }
 
     func activity(for agentId: String) -> [HookEvent] {
@@ -168,6 +193,7 @@ enum ConnectionState: Sendable {
             print("[Annex] Snapshot: \(payload.projects.count) projects, \(payload.agents.count) agent groups")
             projects = payload.projects
             agentsByProject = payload.agents
+            quickAgentsByProject = payload.quickAgents ?? [:]
             theme = payload.theme
             orchestrators = payload.orchestrators
             activityByAgent = [:]
@@ -197,6 +223,60 @@ enum ConnectionState: Sendable {
 
         case .themeChanged(let newTheme):
             theme = newTheme
+
+        case .agentSpawned(let payload):
+            print("[Annex] Agent spawned: \(payload.id) in project \(payload.projectId)")
+            let qa = QuickAgent(
+                id: payload.id,
+                name: nil,
+                kind: payload.kind,
+                status: AgentStatus(rawValue: payload.status),
+                mission: payload.prompt,
+                prompt: payload.prompt,
+                model: payload.model,
+                detailedStatus: nil,
+                orchestrator: payload.orchestrator,
+                parentAgentId: payload.parentAgentId,
+                projectId: payload.projectId,
+                freeAgentMode: payload.freeAgentMode
+            )
+            var agents = quickAgentsByProject[payload.projectId] ?? []
+            agents.append(qa)
+            quickAgentsByProject[payload.projectId] = agents
+
+        case .agentStatus(let payload):
+            print("[Annex] Agent status: \(payload.id) → \(payload.status)")
+            guard let projectId = payload.projectId else { break }
+            if var agents = quickAgentsByProject[projectId],
+               let idx = agents.firstIndex(where: { $0.id == payload.id }) {
+                agents[idx].status = AgentStatus(rawValue: payload.status)
+                quickAgentsByProject[projectId] = agents
+            }
+
+        case .agentCompleted(let payload):
+            print("[Annex] Agent completed: \(payload.id) exit=\(payload.exitCode ?? -1)")
+            guard let projectId = payload.projectId else { break }
+            if var agents = quickAgentsByProject[projectId],
+               let idx = agents.firstIndex(where: { $0.id == payload.id }) {
+                agents[idx].status = AgentStatus(rawValue: payload.status)
+                agents[idx].summary = payload.summary
+                agents[idx].filesModified = payload.filesModified
+                agents[idx].durationMs = payload.durationMs
+                agents[idx].costUsd = payload.costUsd
+                agents[idx].toolsUsed = payload.toolsUsed
+                quickAgentsByProject[projectId] = agents
+            }
+
+        case .agentWoken(let payload):
+            print("[Annex] Agent woken: \(payload.agentId) source=\(payload.source ?? "unknown")")
+            // Update the durable agent's status to running
+            for (projectId, var agents) in agentsByProject {
+                if let idx = agents.firstIndex(where: { $0.id == payload.agentId }) {
+                    agents[idx].status = .running
+                    agentsByProject[projectId] = agents
+                    break
+                }
+            }
 
         case .disconnected(let error):
             print("[Annex] WS disconnected: \(String(describing: error))")
@@ -244,6 +324,64 @@ enum ConnectionState: Sendable {
         }
     }
 
+    // MARK: - Agent Actions
+
+    func spawnQuickAgent(
+        projectId: String,
+        prompt: String,
+        orchestrator: String? = nil,
+        model: String? = nil,
+        freeAgentMode: Bool? = nil,
+        systemPrompt: String? = nil
+    ) async throws {
+        guard let apiClient, let token else { return }
+        let request = SpawnQuickAgentRequest(
+            prompt: prompt,
+            orchestrator: orchestrator,
+            model: model,
+            freeAgentMode: freeAgentMode,
+            systemPrompt: systemPrompt
+        )
+        _ = try await apiClient.spawnQuickAgent(projectId: projectId, request: request, token: token)
+        // State updated via agent:spawned WS event
+    }
+
+    func spawnQuickAgentUnder(
+        parentAgentId: String,
+        prompt: String,
+        model: String? = nil,
+        freeAgentMode: Bool? = nil,
+        systemPrompt: String? = nil
+    ) async throws {
+        guard let apiClient, let token else { return }
+        let request = SpawnQuickAgentRequest(
+            prompt: prompt,
+            orchestrator: nil,
+            model: model,
+            freeAgentMode: freeAgentMode,
+            systemPrompt: systemPrompt
+        )
+        _ = try await apiClient.spawnQuickAgentUnder(parentAgentId: parentAgentId, request: request, token: token)
+    }
+
+    func cancelQuickAgent(agentId: String) async throws {
+        guard let apiClient, let token else { return }
+        _ = try await apiClient.cancelAgent(agentId: agentId, token: token)
+    }
+
+    func wakeAgent(agentId: String, message: String, model: String? = nil) async throws {
+        guard let apiClient, let token else { return }
+        let request = WakeAgentRequest(message: message, model: model)
+        _ = try await apiClient.wakeAgent(agentId: agentId, request: request, token: token)
+        // State updated via agent:woken WS event
+    }
+
+    func sendMessage(agentId: String, message: String) async throws {
+        guard let apiClient, let token else { return }
+        let request = SendMessageRequest(message: message)
+        _ = try await apiClient.sendMessage(agentId: agentId, request: request, token: token)
+    }
+
     // MARK: - Onboarding
 
     func completeOnboarding() {
@@ -274,6 +412,7 @@ enum ConnectionState: Sendable {
         connectionState = .disconnected
         projects = []
         agentsByProject = [:]
+        quickAgentsByProject = [:]
         activityByAgent = [:]
         ptyBufferByAgent = [:]
         serverName = ""

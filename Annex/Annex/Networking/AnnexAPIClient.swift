@@ -7,6 +7,12 @@ enum APIError: Error, Sendable {
     case invalidJSON
     case notFound
     case projectNotFound
+    case agentNotFound
+    case agentAlreadyRunning
+    case agentNotRunning
+    case missingPrompt
+    case missingMessage
+    case invalidOrchestrator
     case serverError(String)
     case networkError(Error)
     case decodingError(Error)
@@ -19,6 +25,12 @@ enum APIError: Error, Sendable {
         case .invalidJSON: return "Request error"
         case .notFound: return "Not found"
         case .projectNotFound: return "Project not found"
+        case .agentNotFound: return "Agent not found"
+        case .agentAlreadyRunning: return "Agent is already running"
+        case .agentNotRunning: return "Agent is not running"
+        case .missingPrompt: return "Prompt is required"
+        case .missingMessage: return "Message is required"
+        case .invalidOrchestrator: return "Invalid orchestrator"
         case .serverError(let msg): return msg
         case .networkError: return "Cannot reach server"
         case .decodingError: return "Unexpected server response"
@@ -105,6 +117,90 @@ final class AnnexAPIClient: Sendable {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
+    // MARK: - POST /api/v1/projects/{projectId}/agents/quick
+
+    func spawnQuickAgent(
+        projectId: String,
+        request: SpawnQuickAgentRequest,
+        token: String
+    ) async throws(APIError) -> SpawnQuickAgentResponse {
+        let url = try makeURL("/api/v1/projects/\(projectId)/agents/quick")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONEncoder().encode(request)
+
+        let data = try await perform(req)
+        return try decode(SpawnQuickAgentResponse.self, from: data)
+    }
+
+    // MARK: - POST /api/v1/agents/{agentId}/agents/quick
+
+    func spawnQuickAgentUnder(
+        parentAgentId: String,
+        request: SpawnQuickAgentRequest,
+        token: String
+    ) async throws(APIError) -> SpawnQuickAgentResponse {
+        let url = try makeURL("/api/v1/agents/\(parentAgentId)/agents/quick")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONEncoder().encode(request)
+
+        let data = try await perform(req)
+        return try decode(SpawnQuickAgentResponse.self, from: data)
+    }
+
+    // MARK: - POST /api/v1/agents/{agentId}/cancel
+
+    func cancelAgent(agentId: String, token: String) async throws(APIError) -> CancelAgentResponse {
+        let url = try makeURL("/api/v1/agents/\(agentId)/cancel")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let data = try await perform(req)
+        return try decode(CancelAgentResponse.self, from: data)
+    }
+
+    // MARK: - POST /api/v1/agents/{agentId}/wake
+
+    func wakeAgent(
+        agentId: String,
+        request: WakeAgentRequest,
+        token: String
+    ) async throws(APIError) -> WakeAgentResponse {
+        let url = try makeURL("/api/v1/agents/\(agentId)/wake")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONEncoder().encode(request)
+
+        let data = try await perform(req)
+        return try decode(WakeAgentResponse.self, from: data)
+    }
+
+    // MARK: - POST /api/v1/agents/{agentId}/message
+
+    func sendMessage(
+        agentId: String,
+        request: SendMessageRequest,
+        token: String
+    ) async throws(APIError) -> SendMessageResponse {
+        let url = try makeURL("/api/v1/agents/\(agentId)/message")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONEncoder().encode(request)
+
+        let data = try await perform(req)
+        return try decode(SendMessageResponse.self, from: data)
+    }
+
     // MARK: - WebSocket URL
 
     func webSocketURL(token: String) throws(APIError) -> URL {
@@ -137,7 +233,7 @@ final class AnnexAPIClient: Sendable {
         }
 
         switch http.statusCode {
-        case 200:
+        case 200, 201:
             return data
         case 401:
             if let errResp = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
@@ -145,13 +241,33 @@ final class AnnexAPIClient: Sendable {
             }
             throw .unauthorized
         case 400:
+            if let errResp = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                switch errResp.error {
+                case "missing_prompt": throw .missingPrompt
+                case "missing_message": throw .missingMessage
+                case "invalid_orchestrator": throw .invalidOrchestrator
+                default: break
+                }
+            }
             throw .invalidJSON
         case 404:
-            if let errResp = try? JSONDecoder().decode(ErrorResponse.self, from: data),
-               errResp.error == "project_not_found" {
-                throw .projectNotFound
+            if let errResp = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                switch errResp.error {
+                case "project_not_found": throw .projectNotFound
+                case "agent_not_found": throw .agentNotFound
+                default: break
+                }
             }
             throw .notFound
+        case 409:
+            if let errResp = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                switch errResp.error {
+                case "agent_already_running": throw .agentAlreadyRunning
+                case "agent_not_running": throw .agentNotRunning
+                default: break
+                }
+            }
+            throw .serverError("Conflict")
         default:
             if let errResp = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
                 throw .serverError(errResp.error)

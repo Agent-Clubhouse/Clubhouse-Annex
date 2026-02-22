@@ -6,6 +6,10 @@ enum WSEvent: Sendable {
     case ptyExit(PtyExitPayload)
     case hookEvent(HookEventPayload)
     case themeChanged(ThemeColors)
+    case agentSpawned(AgentSpawnedPayload)
+    case agentStatus(AgentStatusPayload)
+    case agentCompleted(AgentCompletedPayload)
+    case agentWoken(AgentWokenPayload)
     case disconnected(Error?)
 }
 
@@ -119,6 +123,22 @@ final class WebSocketClient: Sendable {
         case "theme:changed":
             guard let payload = extract(ThemeColors.self) else { return nil }
             return .themeChanged(payload)
+
+        case "agent:spawned":
+            guard let payload = extract(AgentSpawnedPayload.self) else { return nil }
+            return .agentSpawned(payload)
+
+        case "agent:status":
+            guard let payload = extract(AgentStatusPayload.self) else { return nil }
+            return .agentStatus(payload)
+
+        case "agent:completed":
+            guard let payload = extract(AgentCompletedPayload.self) else { return nil }
+            return .agentCompleted(payload)
+
+        case "agent:woken":
+            guard let payload = extract(AgentWokenPayload.self) else { return nil }
+            return .agentWoken(payload)
 
         default:
             print("[Annex] WS unknown message type: \(envelope.type)")

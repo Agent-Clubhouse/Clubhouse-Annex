@@ -80,20 +80,42 @@ struct QuickAgentRowView: View {
     let agent: QuickAgent
 
     private var preview: String {
-        agent.mission ?? ""
+        agent.prompt ?? agent.mission ?? ""
+    }
+
+    private var iconName: String {
+        switch agent.status {
+        case .starting: return "bolt.circle"
+        case .running: return "bolt.fill"
+        case .completed: return "checkmark.circle.fill"
+        case .failed, .error: return "xmark.circle.fill"
+        case .cancelled: return "stop.circle.fill"
+        case .sleeping, nil: return "bolt"
+        }
+    }
+
+    private var iconColor: Color {
+        switch agent.status {
+        case .starting, .running: return .orange
+        case .completed: return .green
+        case .failed, .error: return .red
+        case .cancelled: return .secondary
+        case .sleeping, nil: return .secondary
+        }
     }
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: agent.status == .running ? "bolt.fill" : "checkmark.circle.fill")
+            Image(systemName: iconName)
                 .font(.system(size: 14))
-                .foregroundStyle(agent.status == .running ? .orange : .green)
+                .foregroundStyle(iconColor)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
-                    Text(agent.name)
+                    Text(agent.label)
                         .font(.body.weight(.medium))
+                        .lineLimit(1)
                     if let model = agent.model {
                         let label = model.contains("opus") ? "Opus"
                             : model.contains("sonnet") ? "Sonnet"
@@ -106,6 +128,12 @@ struct QuickAgentRowView: View {
                     Text(preview)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                if let summary = agent.summary {
+                    Text(summary)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
             }
