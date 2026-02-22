@@ -1,6 +1,6 @@
 import Foundation
 
-enum HookEventKind: String, Hashable, Sendable {
+enum HookEventKind: String, Hashable, Codable, Sendable {
     case preTool = "pre_tool"
     case postTool = "post_tool"
     case toolError = "tool_error"
@@ -9,7 +9,7 @@ enum HookEventKind: String, Hashable, Sendable {
     case permissionRequest = "permission_request"
 }
 
-struct HookEvent: Identifiable, Hashable, Sendable {
+struct HookEvent: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let agentId: String
     let kind: HookEventKind

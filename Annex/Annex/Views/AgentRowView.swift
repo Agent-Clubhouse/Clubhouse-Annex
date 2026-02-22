@@ -15,7 +15,7 @@ struct AgentRowView: View {
     }
 
     private var modelLabel: String? {
-        let model = agent.model
+        guard let model = agent.model else { return nil }
         if model.contains("opus") { return "Opus" }
         if model.contains("sonnet") { return "Sonnet" }
         if model.contains("haiku") { return "Haiku" }
@@ -31,14 +31,14 @@ struct AgentRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             AgentAvatarView(
-                color: agent.color,
+                color: agent.color ?? "gray",
                 status: agent.status,
                 state: agent.detailedStatus?.state
             )
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 5) {
-                    Text(agent.name)
+                    Text(agent.name ?? agent.id)
                         .font(.body.weight(.semibold))
                         .lineLimit(1)
 
@@ -50,7 +50,7 @@ struct AgentRowView: View {
                         let c = ModelColors.colors(for: agent.model)
                         ChipView(text: label, bg: c.bg, fg: c.fg)
                     }
-                    if agent.freeAgentMode {
+                    if agent.freeAgentMode == true {
                         ChipView(text: "Free", bg: .red.opacity(0.15), fg: .red)
                     }
                 }

@@ -3,9 +3,16 @@ import SwiftUI
 struct PairingPlaceholderView: View {
     @Environment(AppStore.self) private var store
     @State private var pin: String = ""
+    @State private var discovery = BonjourDiscovery()
+    @State private var selectedServer: DiscoveredServer?
+    @State private var manualHost: String = ""
+    @State private var manualPort: String = "0"
+    @State private var showManualEntry = false
+    @State private var isPairing = false
+    @State private var errorMessage: String?
 
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: 24) {
             Spacer()
 
             Image(systemName: "antenna.radiowaves.left.and.right")
@@ -17,38 +24,172 @@ struct PairingPlaceholderView: View {
             VStack(spacing: 8) {
                 Text("Connect to Clubhouse")
                     .font(.title2.weight(.semibold))
-                Text("Enter the PIN shown in Clubhouse desktop app under Settings > Annex")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+
+                if selectedServer == nil && !showManualEntry {
+                    Text("Searching for Clubhouse servers on your network...")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                } else {
+                    Text("Enter the PIN shown in Clubhouse desktop app under Settings > Annex")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                }
+            }
+
+            // Server selection
+            if !showManualEntry {
+                if discovery.servers.isEmpty && discovery.isSearching {
+                    ProgressView()
+                        .padding()
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(discovery.servers) { server in
+                            Button {
+                                selectedServer = server
+                            } label: {
+                                HStack {
+                                    Image(systemName: "desktopcomputer")
+                                    Text(server.name)
+                                        .font(.body)
+                                    Spacer()
+                                    if selectedServer == server {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.green)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(selectedServer == server
+                                              ? store.theme.surface1Color.opacity(0.6)
+                                              : store.theme.surface0Color.opacity(0.4))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                     .padding(.horizontal, 40)
+                }
+
+                Button {
+                    showManualEntry = true
+                    discovery.stopSearching()
+                } label: {
+                    Text("Enter address manually")
+                        .font(.caption)
+                        .foregroundStyle(store.theme.linkColor)
+                }
+            } else {
+                VStack(spacing: 12) {
+                    TextField("Host (e.g. 192.168.1.100)", text: $manualHost)
+                        .textFieldStyle(.roundedBorder)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    TextField("Port", text: $manualPort)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                }
+                .frame(maxWidth: 280)
+
+                Button {
+                    showManualEntry = false
+                    selectedServer = nil
+                    discovery.startSearching()
+                } label: {
+                    Text("Search for servers instead")
+                        .font(.caption)
+                        .foregroundStyle(store.theme.linkColor)
+                }
             }
 
-            TextField("000000", text: $pin)
-                .keyboardType(.numberPad)
-                .font(.system(size: 32, weight: .medium, design: .monospaced))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 200)
-                .textFieldStyle(.roundedBorder)
-
-            Button {
-                store.isPaired = true
-                store.loadMockData()
-            } label: {
-                Text("Connect")
-                    .font(.body.weight(.semibold))
+            // PIN entry (shown when server is selected)
+            if selectedServer != nil || showManualEntry {
+                TextField("000000", text: $pin)
+                    .keyboardType(.numberPad)
+                    .font(.system(size: 32, weight: .medium, design: .monospaced))
+                    .multilineTextAlignment(.center)
                     .frame(maxWidth: 200)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: pin) { _, newValue in
+                        // Only allow digits, max 6
+                        let filtered = String(newValue.filter(\.isNumber).prefix(6))
+                        if filtered != newValue { pin = filtered }
+                    }
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
+                Button {
+                    Task { await performPairing() }
+                } label: {
+                    if isPairing {
+                        ProgressView()
+                            .frame(maxWidth: 200)
+                    } else {
+                        Text("Connect")
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: 200)
+                    }
+                }
+                .buttonStyle(.glassProminent)
+                .controlSize(.large)
+                .tint(store.theme.accentColor)
+                .disabled(pin.count < 6 || isPairing || !hasValidServer)
             }
-            .buttonStyle(.glassProminent)
-            .controlSize(.large)
-            .tint(store.theme.accentColor)
-            .disabled(pin.count < 6)
 
             Spacer()
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(store.theme.baseColor)
+        .onAppear {
+            discovery.startSearching()
+        }
+        .onDisappear {
+            discovery.stopSearching()
+        }
+    }
+
+    private var hasValidServer: Bool {
+        if showManualEntry {
+            return !manualHost.isEmpty && UInt16(manualPort) != nil && UInt16(manualPort) != 0
+        }
+        return selectedServer != nil
+    }
+
+    private func performPairing() async {
+        isPairing = true
+        errorMessage = nil
+
+        let host: String
+        let port: UInt16
+
+        if showManualEntry {
+            host = manualHost
+            port = UInt16(manualPort) ?? 0
+        } else if let server = selectedServer {
+            host = server.host
+            port = server.port
+        } else {
+            return
+        }
+
+        do {
+            try await store.pair(host: host, port: port, pin: pin)
+            discovery.stopSearching()
+        } catch {
+            errorMessage = store.lastError ?? "Connection failed"
+        }
+
+        isPairing = false
     }
 }
 

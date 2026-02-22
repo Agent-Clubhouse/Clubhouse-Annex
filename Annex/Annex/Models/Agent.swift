@@ -3,13 +3,13 @@ import Foundation
 // Matches spec §5.3 — the fields that come from the server
 struct DurableAgent: Identifiable, Hashable, Codable, Sendable {
     let id: String
-    let name: String
-    let kind: String               // "durable"
-    let color: String
-    let branch: String
-    let model: String
+    let name: String?
+    let kind: String?              // "durable"
+    let color: String?
+    let branch: String?
+    let model: String?
     let orchestrator: String?
-    let freeAgentMode: Bool
+    let freeAgentMode: Bool?
     let icon: String?
 
     // Client-side state derived from hook events / snapshot
