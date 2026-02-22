@@ -394,7 +394,25 @@ enum ConnectionState: Sendable {
 
     func cancelQuickAgent(agentId: String) async throws {
         guard let apiClient, let token else { return }
-        _ = try await apiClient.cancelAgent(agentId: agentId, token: token)
+        let response = try await apiClient.cancelAgent(agentId: agentId, token: token)
+        // Optimistically update status from response
+        for (projectId, var agents) in quickAgentsByProject {
+            if let idx = agents.firstIndex(where: { $0.id == response.id }) {
+                agents[idx].status = AgentStatus(rawValue: response.status)
+                quickAgentsByProject[projectId] = agents
+                break
+            }
+        }
+    }
+
+    func removeQuickAgent(agentId: String) {
+        for (projectId, var agents) in quickAgentsByProject {
+            if let idx = agents.firstIndex(where: { $0.id == agentId }) {
+                agents.remove(at: idx)
+                quickAgentsByProject[projectId] = agents
+                break
+            }
+        }
     }
 
     func wakeAgent(agentId: String, message: String, model: String? = nil) async throws {
