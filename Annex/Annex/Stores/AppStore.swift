@@ -226,6 +226,9 @@ enum ConnectionState: Sendable {
 
         case .agentSpawned(let payload):
             print("[Annex] Agent spawned: \(payload.id) in project \(payload.projectId)")
+            // Skip if optimistic update already added this agent
+            if let existing = quickAgentsByProject[payload.projectId],
+               existing.contains(where: { $0.id == payload.id }) { break }
             let qa = QuickAgent(
                 id: payload.id,
                 name: nil,
@@ -342,8 +345,8 @@ enum ConnectionState: Sendable {
             freeAgentMode: freeAgentMode,
             systemPrompt: systemPrompt
         )
-        _ = try await apiClient.spawnQuickAgent(projectId: projectId, request: request, token: token)
-        // State updated via agent:spawned WS event
+        let response = try await apiClient.spawnQuickAgent(projectId: projectId, request: request, token: token)
+        addQuickAgentFromResponse(response)
     }
 
     func spawnQuickAgentUnder(
@@ -361,7 +364,32 @@ enum ConnectionState: Sendable {
             freeAgentMode: freeAgentMode,
             systemPrompt: systemPrompt
         )
-        _ = try await apiClient.spawnQuickAgentUnder(parentAgentId: parentAgentId, request: request, token: token)
+        let response = try await apiClient.spawnQuickAgentUnder(parentAgentId: parentAgentId, request: request, token: token)
+        addQuickAgentFromResponse(response)
+    }
+
+    private func addQuickAgentFromResponse(_ response: SpawnQuickAgentResponse) {
+        // Skip if WS event already added this agent
+        if let existing = quickAgentsByProject[response.projectId],
+           existing.contains(where: { $0.id == response.id }) { return }
+
+        let qa = QuickAgent(
+            id: response.id,
+            name: response.name,
+            kind: response.kind,
+            status: AgentStatus(rawValue: response.status),
+            mission: response.prompt,
+            prompt: response.prompt,
+            model: response.model,
+            detailedStatus: nil,
+            orchestrator: response.orchestrator,
+            parentAgentId: response.parentAgentId,
+            projectId: response.projectId,
+            freeAgentMode: response.freeAgentMode
+        )
+        var agents = quickAgentsByProject[response.projectId] ?? []
+        agents.append(qa)
+        quickAgentsByProject[response.projectId] = agents
     }
 
     func cancelQuickAgent(agentId: String) async throws {
