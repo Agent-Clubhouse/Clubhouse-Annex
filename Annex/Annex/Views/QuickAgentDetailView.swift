@@ -3,6 +3,8 @@ import SwiftUI
 struct QuickAgentDetailView: View {
     let agent: QuickAgent
     @Environment(AppStore.self) private var store
+    @State private var isCancelling = false
+    @State private var cancelError: String?
 
     private var statusLabel: String {
         switch agent.status {
@@ -126,16 +128,28 @@ struct QuickAgentDetailView: View {
             if agent.status == .running || agent.status == .starting {
                 Section {
                     Button(role: .destructive) {
-                        Task {
-                            try? await store.cancelQuickAgent(agentId: agent.id)
-                        }
+                        Task { await cancelAgent() }
                     } label: {
                         HStack {
                             Spacer()
-                            Text("Cancel Agent")
+                            if isCancelling {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Text("Cancel Agent")
+                            }
                             Spacer()
                         }
                     }
+                    .disabled(isCancelling)
+                }
+            }
+
+            if let cancelError {
+                Section {
+                    Text(cancelError)
+                        .foregroundStyle(.red)
+                        .font(.subheadline)
                 }
             }
         }
@@ -144,6 +158,17 @@ struct QuickAgentDetailView: View {
         .background(store.theme.baseColor)
         .navigationTitle(agent.label)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func cancelAgent() async {
+        isCancelling = true
+        cancelError = nil
+        do {
+            try await store.cancelQuickAgent(agentId: agent.id)
+        } catch {
+            cancelError = (error as? APIError)?.userMessage ?? error.localizedDescription
+        }
+        isCancelling = false
     }
 
     private func formatDuration(_ ms: Int) -> String {

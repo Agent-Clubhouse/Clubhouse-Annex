@@ -51,6 +51,7 @@ struct AgentDetailView: View {
                     status: agent.status,
                     state: agent.detailedStatus?.state,
                     name: agent.name,
+                    iconData: store.agentIcons[agent.id],
                     size: 40
                 )
 

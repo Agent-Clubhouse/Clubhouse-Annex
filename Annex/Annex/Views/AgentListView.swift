@@ -34,6 +34,11 @@ struct AgentListView: View {
                         }
                         .listRowBackground(store.theme.surface0Color.opacity(0.5))
                     }
+                    .onDelete { offsets in
+                        for index in offsets {
+                            store.removeQuickAgent(agentId: quickAgents[index].id)
+                        }
+                    }
                 }
             }
         }

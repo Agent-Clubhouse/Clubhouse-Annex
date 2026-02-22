@@ -219,6 +219,7 @@ enum ConnectionState: Sendable {
             ptyBufferByAgent = [:]
             connectionState = .connected
             isPaired = true
+            Task { await fetchIcons() }
 
         case .ptyData(let payload):
             var buf = ptyBufferByAgent[payload.agentId] ?? ""
@@ -245,6 +246,9 @@ enum ConnectionState: Sendable {
 
         case .agentSpawned(let payload):
             print("[Annex] Agent spawned: \(payload.id) in project \(payload.projectId)")
+            // Skip if optimistic update already added this agent
+            if let existing = quickAgentsByProject[payload.projectId],
+               existing.contains(where: { $0.id == payload.id }) { break }
             let qa = QuickAgent(
                 id: payload.id,
                 name: nil,
@@ -361,8 +365,8 @@ enum ConnectionState: Sendable {
             freeAgentMode: freeAgentMode,
             systemPrompt: systemPrompt
         )
-        _ = try await apiClient.spawnQuickAgent(projectId: projectId, request: request, token: token)
-        // State updated via agent:spawned WS event
+        let response = try await apiClient.spawnQuickAgent(projectId: projectId, request: request, token: token)
+        addQuickAgentFromResponse(response)
     }
 
     func spawnQuickAgentUnder(
@@ -380,12 +384,55 @@ enum ConnectionState: Sendable {
             freeAgentMode: freeAgentMode,
             systemPrompt: systemPrompt
         )
-        _ = try await apiClient.spawnQuickAgentUnder(parentAgentId: parentAgentId, request: request, token: token)
+        let response = try await apiClient.spawnQuickAgentUnder(parentAgentId: parentAgentId, request: request, token: token)
+        addQuickAgentFromResponse(response)
+    }
+
+    private func addQuickAgentFromResponse(_ response: SpawnQuickAgentResponse) {
+        // Skip if WS event already added this agent
+        if let existing = quickAgentsByProject[response.projectId],
+           existing.contains(where: { $0.id == response.id }) { return }
+
+        let qa = QuickAgent(
+            id: response.id,
+            name: response.name,
+            kind: response.kind,
+            status: AgentStatus(rawValue: response.status),
+            mission: response.prompt,
+            prompt: response.prompt,
+            model: response.model,
+            detailedStatus: nil,
+            orchestrator: response.orchestrator,
+            parentAgentId: response.parentAgentId,
+            projectId: response.projectId,
+            freeAgentMode: response.freeAgentMode
+        )
+        var agents = quickAgentsByProject[response.projectId] ?? []
+        agents.append(qa)
+        quickAgentsByProject[response.projectId] = agents
     }
 
     func cancelQuickAgent(agentId: String) async throws {
         guard let apiClient, let token else { return }
-        _ = try await apiClient.cancelAgent(agentId: agentId, token: token)
+        let response = try await apiClient.cancelAgent(agentId: agentId, token: token)
+        // Optimistically update status from response
+        for (projectId, var agents) in quickAgentsByProject {
+            if let idx = agents.firstIndex(where: { $0.id == response.id }) {
+                agents[idx].status = AgentStatus(rawValue: response.status)
+                quickAgentsByProject[projectId] = agents
+                break
+            }
+        }
+    }
+
+    func removeQuickAgent(agentId: String) {
+        for (projectId, var agents) in quickAgentsByProject {
+            if let idx = agents.firstIndex(where: { $0.id == agentId }) {
+                agents.remove(at: idx)
+                quickAgentsByProject[projectId] = agents
+                break
+            }
+        }
     }
 
     func wakeAgent(agentId: String, message: String, model: String? = nil) async throws {
@@ -399,6 +446,43 @@ enum ConnectionState: Sendable {
         guard let apiClient, let token else { return }
         let request = SendMessageRequest(message: message)
         _ = try await apiClient.sendMessage(agentId: agentId, request: request, token: token)
+    }
+
+    // MARK: - Icon Cache
+
+    var agentIcons: [String: Data] = [:]
+    var projectIcons: [String: Data] = [:]
+
+    func agentIconURL(agentId: String) -> URL? {
+        guard let apiClient, let token else { return nil }
+        return URL(string: "\(apiClient.baseURL)/api/v1/icons/agent/\(agentId)?token=\(token)")
+    }
+
+    func projectIconURL(projectId: String) -> URL? {
+        guard let apiClient, let token else { return nil }
+        return URL(string: "\(apiClient.baseURL)/api/v1/icons/project/\(projectId)?token=\(token)")
+    }
+
+    func fetchIcons() async {
+        guard let apiClient, let token else { return }
+
+        // Fetch agent icons for agents that have an icon field set
+        for agents in agentsByProject.values {
+            for agent in agents where agent.icon != nil {
+                if agentIcons[agent.id] != nil { continue }
+                if let data = await apiClient.fetchAgentIcon(agentId: agent.id, token: token) {
+                    agentIcons[agent.id] = data
+                }
+            }
+        }
+
+        // Fetch project icons for projects that have an icon field set
+        for project in projects where project.icon != nil {
+            if projectIcons[project.id] != nil { continue }
+            if let data = await apiClient.fetchProjectIcon(projectId: project.id, token: token) {
+                projectIcons[project.id] = data
+            }
+        }
     }
 
     // MARK: - Onboarding
@@ -434,6 +518,8 @@ enum ConnectionState: Sendable {
         quickAgentsByProject = [:]
         activityByAgent = [:]
         ptyBufferByAgent = [:]
+        agentIcons = [:]
+        projectIcons = [:]
         serverName = ""
         orchestrators = [:]
         token = nil

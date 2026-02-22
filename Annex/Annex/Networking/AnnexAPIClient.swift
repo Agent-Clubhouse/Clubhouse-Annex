@@ -201,6 +201,30 @@ final class AnnexAPIClient: Sendable {
         return try decode(SendMessageResponse.self, from: data)
     }
 
+    // MARK: - GET /api/v1/icons/agent/{agentId}
+
+    func fetchAgentIcon(agentId: String, token: String) async -> Data? {
+        guard let url = try? makeURL("/api/v1/icons/agent/\(agentId)") else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (data, response) = try? await session.data(for: req),
+              let http = response as? HTTPURLResponse,
+              http.statusCode == 200 else { return nil }
+        return data
+    }
+
+    // MARK: - GET /api/v1/icons/project/{projectId}
+
+    func fetchProjectIcon(projectId: String, token: String) async -> Data? {
+        guard let url = try? makeURL("/api/v1/icons/project/\(projectId)") else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (data, response) = try? await session.data(for: req),
+              let http = response as? HTTPURLResponse,
+              http.statusCode == 200 else { return nil }
+        return data
+    }
+
     // MARK: - WebSocket URL
 
     func webSocketURL(token: String) throws(APIError) -> URL {
