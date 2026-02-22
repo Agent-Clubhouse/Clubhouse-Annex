@@ -29,6 +29,7 @@ struct WSMessage: Codable, Sendable {
 struct SnapshotPayload: Codable, Sendable {
     let projects: [Project]
     let agents: [String: [DurableAgent]]
+    let quickAgents: [String: [QuickAgent]]?
     let theme: ThemeColors
     let orchestrators: [String: OrchestratorEntry]
 }
@@ -69,6 +70,107 @@ struct ServerHookEvent: Codable, Sendable {
             timestamp: timestamp
         )
     }
+}
+
+// MARK: - Agent Action Requests
+
+struct SpawnQuickAgentRequest: Codable, Sendable {
+    let prompt: String
+    let orchestrator: String?
+    let model: String?
+    let freeAgentMode: Bool?
+    let systemPrompt: String?
+}
+
+struct WakeAgentRequest: Codable, Sendable {
+    let message: String
+    let model: String?
+}
+
+struct SendMessageRequest: Codable, Sendable {
+    let message: String
+}
+
+// MARK: - Agent Action Responses
+
+struct SpawnQuickAgentResponse: Codable, Sendable {
+    let id: String
+    let name: String?
+    let kind: String
+    let status: String
+    let prompt: String
+    let model: String?
+    let orchestrator: String?
+    let freeAgentMode: Bool?
+    let parentAgentId: String?
+    let projectId: String
+}
+
+struct WakeAgentResponse: Codable, Sendable {
+    let id: String
+    let name: String?
+    let kind: String?
+    let color: String?
+    let status: String
+    let branch: String?
+    let model: String?
+    let orchestrator: String?
+    let freeAgentMode: Bool?
+    let icon: String?
+    let detailedStatus: AgentDetailedStatus?
+}
+
+struct CancelAgentResponse: Codable, Sendable {
+    let id: String
+    let status: String
+}
+
+struct SendMessageResponse: Codable, Sendable {
+    let id: String
+    let status: String
+    let delivered: Bool
+}
+
+// MARK: - New WebSocket Payloads
+
+struct AgentSpawnedPayload: Codable, Sendable {
+    let id: String
+    let kind: String
+    let status: String
+    let prompt: String?
+    let model: String?
+    let orchestrator: String?
+    let freeAgentMode: Bool?
+    let parentAgentId: String?
+    let projectId: String
+}
+
+struct AgentStatusPayload: Codable, Sendable {
+    let id: String
+    let kind: String
+    let status: String
+    let projectId: String?
+    let parentAgentId: String?
+}
+
+struct AgentCompletedPayload: Codable, Sendable {
+    let id: String
+    let kind: String
+    let status: String
+    let exitCode: Int?
+    let projectId: String?
+    let parentAgentId: String?
+    let summary: String?
+    let filesModified: [String]?
+    let durationMs: Int?
+    let costUsd: Double?
+    let toolsUsed: [String]?
+}
+
+struct AgentWokenPayload: Codable, Sendable {
+    let agentId: String
+    let message: String
+    let source: String?
 }
 
 // MARK: - Flexible JSON type for arbitrary payloads

@@ -1,7 +1,8 @@
 import Foundation
 
 enum AgentStatus: String, Codable, Hashable, Sendable {
-    case running, sleeping, error
+    case starting, running, sleeping, error
+    case completed, failed, cancelled
 }
 
 enum AgentState: String, Codable, Hashable, Sendable {
