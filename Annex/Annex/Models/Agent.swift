@@ -17,6 +17,18 @@ struct DurableAgent: Identifiable, Hashable, Codable, Sendable {
     var mission: String?
     var detailedStatus: AgentDetailedStatus?
     var quickAgents: [QuickAgent]?
+
+    /// Sort order for the all-agents view: active states first.
+    var statusSortOrder: Int {
+        switch status {
+        case .running, .starting: 0
+        case .error, .failed: 1
+        case .sleeping: 2
+        case .completed: 3
+        case .cancelled: 4
+        case nil: 5
+        }
+    }
 }
 
 struct QuickAgent: Identifiable, Hashable, Codable, Sendable {
