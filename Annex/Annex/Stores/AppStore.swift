@@ -31,6 +31,7 @@ enum ConnectionState: Sendable {
     var projects: [Project] = []
     var agentsByProject: [String: [DurableAgent]] = [:]
     var activityByAgent: [String: [HookEvent]] = [:]
+    var ptyBufferByAgent: [String: String] = [:]
     var isPaired: Bool = false
     var theme: ThemeColors = .mock
     var serverName: String = ""
@@ -61,6 +62,10 @@ enum ConnectionState: Sendable {
         activityByAgent[agentId] ?? []
     }
 
+    func ptyBuffer(for agentId: String) -> String {
+        ptyBufferByAgent[agentId] ?? ""
+    }
+
     var totalAgentCount: Int {
         agentsByProject.values.flatMap { $0 }.count
     }
@@ -75,6 +80,7 @@ enum ConnectionState: Sendable {
         connectionState = .pairing
         lastError = nil
         let client = AnnexAPIClient(host: host, port: port)
+        print("[Annex] Pairing with host=\(host) port=\(port) baseURL=\(client.baseURL)")
 
         do {
             let response = try await client.pair(pin: pin)
@@ -86,6 +92,7 @@ enum ConnectionState: Sendable {
         } catch let error as APIError {
             connectionState = .disconnected
             lastError = error.userMessage
+            print("[Annex] Pair failed: \(error) — \(error.userMessage)")
             throw error
         }
     }
@@ -116,15 +123,20 @@ enum ConnectionState: Sendable {
     // MARK: - Connection Lifecycle
 
     private func connectAfterPairing() async {
-        guard let apiClient, let token else { return }
+        guard let apiClient, let token else {
+            print("[Annex] connectAfterPairing: no apiClient or token")
+            return
+        }
         connectionState = .connecting
 
         do {
             let status = try await apiClient.getStatus(token: token)
+            print("[Annex] Status: device=\(status.deviceName) agents=\(status.agentCount)")
             serverName = status.deviceName
             isPaired = true
             await connectWebSocket()
         } catch {
+            print("[Annex] connectAfterPairing failed: \(error)")
             connectionState = .disconnected
             lastError = "Failed to connect after pairing"
         }
@@ -152,23 +164,31 @@ enum ConnectionState: Sendable {
     private func handleWSEvent(_ event: WSEvent) async {
         switch event {
         case .snapshot(let payload):
+            print("[Annex] Snapshot: \(payload.projects.count) projects, \(payload.agents.count) agent groups")
             projects = payload.projects
             agentsByProject = payload.agents
             theme = payload.theme
             orchestrators = payload.orchestrators
-            activityByAgent = [:]  // Reset activity on fresh snapshot
+            activityByAgent = [:]
+            ptyBufferByAgent = [:]
             connectionState = .connected
             isPaired = true
 
-        case .ptyData:
-            // PTY data is handled by terminal views if/when added
-            break
+        case .ptyData(let payload):
+            var buf = ptyBufferByAgent[payload.agentId] ?? ""
+            buf.append(payload.data)
+            // Cap at ~64KB to avoid unbounded growth
+            if buf.count > 65_536 {
+                buf = String(buf.suffix(49_152))
+            }
+            ptyBufferByAgent[payload.agentId] = buf
 
         case .ptyExit:
             // Could update agent status, but snapshot updates will cover this
             break
 
         case .hookEvent(let payload):
+            print("[Annex] Hook event: agent=\(payload.agentId) kind=\(payload.event.kind)")
             let hookEvent = payload.event.toHookEvent(agentId: payload.agentId)
             var events = activityByAgent[payload.agentId] ?? []
             events.append(hookEvent)
@@ -177,7 +197,8 @@ enum ConnectionState: Sendable {
         case .themeChanged(let newTheme):
             theme = newTheme
 
-        case .disconnected:
+        case .disconnected(let error):
+            print("[Annex] WS disconnected: \(String(describing: error))")
             if isPaired {
                 await attemptReconnect()
             }
@@ -239,6 +260,7 @@ enum ConnectionState: Sendable {
         projects = []
         agentsByProject = [:]
         activityByAgent = [:]
+        ptyBufferByAgent = [:]
         serverName = ""
         orchestrators = [:]
         token = nil

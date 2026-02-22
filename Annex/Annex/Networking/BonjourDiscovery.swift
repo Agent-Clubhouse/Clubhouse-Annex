@@ -108,9 +108,12 @@ struct DiscoveredServer: Identifiable, Hashable, Sendable {
                         let hostStr: String
                         switch host {
                         case .ipv4(let addr):
-                            hostStr = "\(addr)"
+                            // Strip interface scope ID (e.g. "%en0") from resolved address
+                            let raw = "\(addr)"
+                            hostStr = raw.split(separator: "%").first.map(String.init) ?? raw
                         case .ipv6(let addr):
-                            hostStr = "\(addr)"
+                            let raw = "\(addr)"
+                            hostStr = raw.split(separator: "%").first.map(String.init) ?? raw
                         case .name(let name, _):
                             hostStr = name
                         @unknown default:
@@ -122,6 +125,7 @@ struct DiscoveredServer: Identifiable, Hashable, Sendable {
                             host: hostStr,
                             port: port.rawValue
                         )
+                        print("[Annex] Bonjour resolved: name=\(serviceName) host=\(hostStr) port=\(port.rawValue)")
                         if !self.servers.contains(where: { $0.id == id }) {
                             self.servers.append(server)
                         }

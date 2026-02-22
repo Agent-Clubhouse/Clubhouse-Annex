@@ -25,6 +25,7 @@ final class WebSocketClient: Sendable {
             let wsTask = session.webSocketTask(with: url)
             self.task = wsTask
             self.isConnected = true
+            print("[Annex] WS connecting to \(url)")
             wsTask.resume()
 
             Task {
@@ -61,6 +62,7 @@ final class WebSocketClient: Sendable {
                     break
                 }
             } catch {
+                print("[Annex] WS receive error: \(error)")
                 if isConnected {
                     continuation.yield(.disconnected(error))
                 }
@@ -76,36 +78,50 @@ final class WebSocketClient: Sendable {
         let decoder = JSONDecoder()
 
         // First decode the envelope to get the type
-        guard let envelope = try? decoder.decode(WSMessage.self, from: data) else { return nil }
+        guard let envelope = try? decoder.decode(WSMessage.self, from: data) else {
+            print("[Annex] WS failed to decode envelope: \(text.prefix(200))")
+            return nil
+        }
+
+        print("[Annex] WS received type=\(envelope.type)")
 
         // Re-decode payload section based on type
-        // We need to extract just the payload from the raw data
         struct PayloadExtractor<T: Decodable>: Decodable {
             let payload: T
         }
 
+        func extract<T: Decodable>(_ type: T.Type) -> T? {
+            do {
+                return try decoder.decode(PayloadExtractor<T>.self, from: data).payload
+            } catch {
+                print("[Annex] WS decode error for \(envelope.type): \(error)")
+                return nil
+            }
+        }
+
         switch envelope.type {
         case "snapshot":
-            guard let extracted = try? decoder.decode(PayloadExtractor<SnapshotPayload>.self, from: data) else { return nil }
-            return .snapshot(extracted.payload)
+            guard let payload = extract(SnapshotPayload.self) else { return nil }
+            return .snapshot(payload)
 
         case "pty:data":
-            guard let extracted = try? decoder.decode(PayloadExtractor<PtyDataPayload>.self, from: data) else { return nil }
-            return .ptyData(extracted.payload)
+            guard let payload = extract(PtyDataPayload.self) else { return nil }
+            return .ptyData(payload)
 
         case "pty:exit":
-            guard let extracted = try? decoder.decode(PayloadExtractor<PtyExitPayload>.self, from: data) else { return nil }
-            return .ptyExit(extracted.payload)
+            guard let payload = extract(PtyExitPayload.self) else { return nil }
+            return .ptyExit(payload)
 
         case "hook:event":
-            guard let extracted = try? decoder.decode(PayloadExtractor<HookEventPayload>.self, from: data) else { return nil }
-            return .hookEvent(extracted.payload)
+            guard let payload = extract(HookEventPayload.self) else { return nil }
+            return .hookEvent(payload)
 
         case "theme:changed":
-            guard let extracted = try? decoder.decode(PayloadExtractor<ThemeColors>.self, from: data) else { return nil }
-            return .themeChanged(extracted.payload)
+            guard let payload = extract(ThemeColors.self) else { return nil }
+            return .themeChanged(payload)
 
         default:
+            print("[Annex] WS unknown message type: \(envelope.type)")
             return nil
         }
     }

@@ -37,7 +37,7 @@ struct AgentDetailView: View {
             // Status bar
             HStack(spacing: 12) {
                 AgentAvatarView(
-                    color: agent.color,
+                    color: agent.color ?? "gray",
                     status: agent.status,
                     state: agent.detailedStatus?.state,
                     size: 40
@@ -45,9 +45,9 @@ struct AgentDetailView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 5) {
-                        Text(agent.name)
+                        Text(agent.name ?? agent.id)
                             .font(.headline)
-                        if agent.freeAgentMode {
+                        if agent.freeAgentMode == true {
                             ChipView(text: "Free", bg: .red.opacity(0.15), fg: .red)
                         }
                     }
@@ -68,9 +68,11 @@ struct AgentDetailView: View {
                         let c = OrchestratorColors.colors(for: agent.orchestrator)
                         ChipView(text: label, bg: c.bg, fg: c.fg)
                     }
-                    let modelLabel = agent.model.replacingOccurrences(of: "claude-", with: "")
-                    let c = ModelColors.colors(for: agent.model)
-                    ChipView(text: modelLabel, bg: c.bg, fg: c.fg)
+                    if let model = agent.model {
+                        let modelLabel = model.replacingOccurrences(of: "claude-", with: "")
+                        let c = ModelColors.colors(for: model)
+                        ChipView(text: modelLabel, bg: c.bg, fg: c.fg)
+                    }
                 }
             }
             .padding()
@@ -78,7 +80,7 @@ struct AgentDetailView: View {
 
             HStack(spacing: 4) {
                 Image(systemName: "arrow.triangle.branch")
-                Text(agent.branch)
+                Text(agent.branch ?? "")
                 Spacer()
             }
             .font(.caption2)
@@ -92,8 +94,22 @@ struct AgentDetailView: View {
             ActivityFeedView(events: store.activity(for: agent.id))
         }
         .background(store.theme.baseColor)
-        .navigationTitle(agent.name)
+        .navigationTitle(agent.name ?? agent.id)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(value: "live:\(agent.id)") {
+                    Label("See Live", systemImage: "terminal")
+                        .font(.caption)
+                }
+            }
+        }
+        .navigationDestination(for: String.self) { value in
+            if value.hasPrefix("live:") {
+                let id = String(value.dropFirst(5))
+                LiveTerminalView(agentId: id)
+            }
+        }
     }
 }
 

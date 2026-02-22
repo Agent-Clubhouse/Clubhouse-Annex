@@ -31,7 +31,16 @@ final class AnnexAPIClient: Sendable {
     let port: UInt16
     private let session: URLSession
 
-    nonisolated var baseURL: String { "http://\(host):\(port)" }
+    /// Host formatted for use in URLs (IPv6 addresses wrapped in brackets).
+    private nonisolated var urlHost: String {
+        if host.contains(":") {
+            let escaped = host.replacingOccurrences(of: "%", with: "%25")
+            return "[\(escaped)]"
+        }
+        return host
+    }
+
+    nonisolated var baseURL: String { "http://\(urlHost):\(port)" }
 
     init(host: String, port: UInt16, session: URLSession = .shared) {
         self.host = host
@@ -99,7 +108,7 @@ final class AnnexAPIClient: Sendable {
     // MARK: - WebSocket URL
 
     func webSocketURL(token: String) throws(APIError) -> URL {
-        guard let url = URL(string: "ws://\(host):\(port)/ws?token=\(token)") else {
+        guard let url = URL(string: "ws://\(urlHost):\(port)/ws?token=\(token)") else {
             throw .invalidURL
         }
         return url
