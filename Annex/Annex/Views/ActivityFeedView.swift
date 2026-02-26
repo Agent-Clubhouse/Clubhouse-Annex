@@ -3,14 +3,24 @@ import SwiftUI
 struct ActivityFeedView: View {
     let events: [HookEvent]
     @Environment(AppStore.self) private var store
+    @State private var selectedPermission: PermissionRequest?
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(events) { event in
-                        ActivityEventRow(event: event, accent: store.theme.accentColor)
-                            .id(event.id)
+                        if event.kind == .permissionRequest,
+                           let perm = store.pendingPermissions.values.first(where: {
+                               $0.agentId == event.agentId && $0.toolName == event.toolName
+                           }) {
+                            ActivityEventRow(event: event, accent: store.theme.accentColor, isPending: true)
+                                .id(event.id)
+                                .onTapGesture { selectedPermission = perm }
+                        } else {
+                            ActivityEventRow(event: event, accent: store.theme.accentColor)
+                                .id(event.id)
+                        }
                     }
                 }
                 .padding(.horizontal)
@@ -24,12 +34,16 @@ struct ActivityFeedView: View {
                 }
             }
         }
+        .sheet(item: $selectedPermission) { perm in
+            PermissionRequestSheet(permission: perm, agentName: nil)
+        }
     }
 }
 
 private struct ActivityEventRow: View {
     let event: HookEvent
     let accent: Color
+    var isPending: Bool = false
 
     private var icon: String {
         switch event.kind {
@@ -72,7 +86,8 @@ private struct ActivityEventRow: View {
         case .notification:
             return event.message ?? ""
         case .permissionRequest:
-            return "Needs permission: \(event.message ?? event.toolName ?? "unknown")"
+            let detail = event.message ?? event.toolName ?? "unknown"
+            return isPending ? "Tap to respond: \(detail)" : "Needs permission: \(detail)"
         }
     }
 

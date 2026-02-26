@@ -32,6 +32,7 @@ struct SnapshotPayload: Codable, Sendable {
     let quickAgents: [String: [QuickAgent]]?
     let theme: ThemeColors
     let orchestrators: [String: OrchestratorEntry]
+    let pendingPermissions: [PermissionRequest]?
 }
 
 struct PtyDataPayload: Codable, Sendable {
@@ -171,6 +172,37 @@ struct AgentWokenPayload: Codable, Sendable {
     let agentId: String
     let message: String
     let source: String?
+}
+
+// MARK: - Permission Models
+
+struct PermissionRequest: Identifiable, Codable, Sendable, Hashable {
+    let id: String          // requestId
+    let agentId: String
+    let toolName: String
+    let toolInput: JSONValue?
+    let message: String?
+    let deadline: Int       // Unix timestamp (ms) when permission expires
+}
+
+struct PermissionRequestPayload: Codable, Sendable {
+    let requestId: String
+    let agentId: String
+    let toolName: String
+    let toolInput: JSONValue?
+    let message: String?
+    let deadline: Int
+}
+
+struct PermissionResponseRequest: Codable, Sendable {
+    let requestId: String
+    let decision: String    // "allow" or "deny"
+}
+
+struct PermissionResponseResponse: Codable, Sendable {
+    let requestId: String
+    let decision: String
+    let delivered: Bool
 }
 
 // MARK: - Flexible JSON type for arbitrary payloads
