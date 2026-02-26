@@ -6,6 +6,7 @@ struct AgentDetailView: View {
     @State private var showWakeSheet = false
     @State private var showMessageSheet = false
     @State private var showSpawnSheet = false
+    @State private var showPermissionSheet = false
 
     private var stateMessage: String {
         guard let ds = agent.detailedStatus else {
@@ -103,6 +104,12 @@ struct AgentDetailView: View {
 
             Divider()
 
+            if let perm = store.pendingPermission(for: agent.id) {
+                PermissionBanner(permission: perm) {
+                    showPermissionSheet = true
+                }
+            }
+
             ActivityFeedView(events: store.activity(for: agent.id))
         }
         .background(store.theme.baseColor)
@@ -150,6 +157,14 @@ struct AgentDetailView: View {
                 parentAgentId: agent.id,
                 orchestrators: store.orchestrators
             )
+        }
+        .sheet(isPresented: $showPermissionSheet) {
+            if let perm = store.pendingPermission(for: agent.id) {
+                PermissionRequestSheet(
+                    permission: perm,
+                    agentName: agent.name
+                )
+            }
         }
         .navigationDestination(for: String.self) { value in
             if value.hasPrefix("live:") {

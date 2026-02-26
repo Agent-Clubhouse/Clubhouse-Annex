@@ -10,6 +10,7 @@ enum WSEvent: Sendable {
     case agentStatus(AgentStatusPayload)
     case agentCompleted(AgentCompletedPayload)
     case agentWoken(AgentWokenPayload)
+    case permissionRequest(PermissionRequestPayload)
     case disconnected(Error?)
 }
 
@@ -139,6 +140,10 @@ final class WebSocketClient: Sendable {
         case "agent:woken":
             guard let payload = extract(AgentWokenPayload.self) else { return nil }
             return .agentWoken(payload)
+
+        case "permission:request":
+            guard let payload = extract(PermissionRequestPayload.self) else { return nil }
+            return .permissionRequest(payload)
 
         default:
             print("[Annex] WS unknown message type: \(envelope.type)")

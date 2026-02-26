@@ -880,3 +880,229 @@ struct AgentColorTests {
         #expect(color == .gray)
     }
 }
+
+// MARK: - Permission Model Tests
+
+struct PermissionModelTests {
+    @Test func decodePermissionRequest() throws {
+        let json = """
+        {"id":"perm_001","agentId":"durable_001","toolName":"Bash","toolInput":{"command":"rm -rf /tmp/test"},"message":"Run shell command","deadline":1737000120000}
+        """
+        let perm = try JSONDecoder().decode(PermissionRequest.self, from: Data(json.utf8))
+        #expect(perm.id == "perm_001")
+        #expect(perm.agentId == "durable_001")
+        #expect(perm.toolName == "Bash")
+        #expect(perm.message == "Run shell command")
+        #expect(perm.deadline == 1737000120000)
+        if case .object(let dict) = perm.toolInput,
+           case .string(let cmd) = dict["command"] {
+            #expect(cmd == "rm -rf /tmp/test")
+        } else {
+            Issue.record("Expected object toolInput with command field")
+        }
+    }
+
+    @Test func decodePermissionRequestMinimal() throws {
+        let json = """
+        {"id":"perm_002","agentId":"durable_001","toolName":"Edit","deadline":1737000120000}
+        """
+        let perm = try JSONDecoder().decode(PermissionRequest.self, from: Data(json.utf8))
+        #expect(perm.id == "perm_002")
+        #expect(perm.toolName == "Edit")
+        #expect(perm.toolInput == nil)
+        #expect(perm.message == nil)
+    }
+
+    @Test func decodePermissionRequestPayload() throws {
+        let json = """
+        {"type":"permission:request","payload":{"requestId":"perm_001","agentId":"durable_001","toolName":"Bash","toolInput":null,"message":"Run command","deadline":1737000120000}}
+        """
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let msg = try JSONDecoder().decode(PayloadExtractor<PermissionRequestPayload>.self, from: Data(json.utf8))
+        #expect(msg.payload.requestId == "perm_001")
+        #expect(msg.payload.agentId == "durable_001")
+        #expect(msg.payload.toolName == "Bash")
+        #expect(msg.payload.message == "Run command")
+        #expect(msg.payload.deadline == 1737000120000)
+    }
+
+    @Test func encodePermissionResponseRequest() throws {
+        let request = PermissionResponseRequest(requestId: "perm_001", decision: "allow")
+        let data = try JSONEncoder().encode(request)
+        let decoded = try JSONDecoder().decode(PermissionResponseRequest.self, from: data)
+        #expect(decoded.requestId == "perm_001")
+        #expect(decoded.decision == "allow")
+    }
+
+    @Test func encodePermissionResponseRequestDeny() throws {
+        let request = PermissionResponseRequest(requestId: "perm_002", decision: "deny")
+        let data = try JSONEncoder().encode(request)
+        let decoded = try JSONDecoder().decode(PermissionResponseRequest.self, from: data)
+        #expect(decoded.requestId == "perm_002")
+        #expect(decoded.decision == "deny")
+    }
+
+    @Test func decodePermissionResponseResponse() throws {
+        let json = """
+        {"requestId":"perm_001","decision":"allow","delivered":true}
+        """
+        let response = try JSONDecoder().decode(PermissionResponseResponse.self, from: Data(json.utf8))
+        #expect(response.requestId == "perm_001")
+        #expect(response.decision == "allow")
+        #expect(response.delivered == true)
+    }
+
+    @Test func permissionRequestIdentifiable() {
+        let perm = PermissionRequest(
+            id: "perm_001",
+            agentId: "agent_1",
+            toolName: "Bash",
+            toolInput: nil,
+            message: nil,
+            deadline: 1737000120000
+        )
+        #expect(perm.id == "perm_001")
+    }
+
+    @Test func permissionRequestHashable() {
+        let perm1 = PermissionRequest(id: "perm_001", agentId: "a1", toolName: "Bash", toolInput: nil, message: nil, deadline: 100)
+        let perm2 = PermissionRequest(id: "perm_002", agentId: "a1", toolName: "Edit", toolInput: nil, message: nil, deadline: 200)
+        let set: Set<PermissionRequest> = [perm1, perm2]
+        #expect(set.count == 2)
+    }
+}
+
+// MARK: - Permission WebSocket Tests
+
+struct PermissionWSTests {
+    @Test func decodePermissionRequestWSMessage() throws {
+        let json = """
+        {"type":"permission:request","payload":{"requestId":"perm_abc","agentId":"durable_001","toolName":"Write","toolInput":{"path":"/src/main.ts"},"message":"Write to file","deadline":1737000120000}}
+        """
+        let envelope = try JSONDecoder().decode(WSMessage.self, from: Data(json.utf8))
+        #expect(envelope.type == "permission:request")
+
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let msg = try JSONDecoder().decode(PayloadExtractor<PermissionRequestPayload>.self, from: Data(json.utf8))
+        #expect(msg.payload.requestId == "perm_abc")
+        #expect(msg.payload.toolName == "Write")
+    }
+
+    @Test func decodeSnapshotWithPendingPermissions() throws {
+        let json = """
+        {
+            "type": "snapshot",
+            "payload": {
+                "projects": [],
+                "agents": {},
+                "theme": {"base":"#1e1e2e","mantle":"#181825","crust":"#11111b","text":"#cdd6f4","subtext0":"#a6adc8","subtext1":"#bac2de","surface0":"#313244","surface1":"#45475a","surface2":"#585b70","accent":"#89b4fa","link":"#89b4fa"},
+                "orchestrators": {},
+                "pendingPermissions": [
+                    {"id":"perm_001","agentId":"agent_1","toolName":"Bash","message":"Run npm test","deadline":1737000120000}
+                ]
+            }
+        }
+        """
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let snapshot = try JSONDecoder().decode(PayloadExtractor<SnapshotPayload>.self, from: Data(json.utf8))
+        #expect(snapshot.payload.pendingPermissions?.count == 1)
+        #expect(snapshot.payload.pendingPermissions?[0].id == "perm_001")
+        #expect(snapshot.payload.pendingPermissions?[0].toolName == "Bash")
+    }
+
+    @Test func decodeSnapshotWithoutPendingPermissions() throws {
+        let json = """
+        {
+            "type": "snapshot",
+            "payload": {
+                "projects": [],
+                "agents": {},
+                "theme": {"base":"#1e1e2e","mantle":"#181825","crust":"#11111b","text":"#cdd6f4","subtext0":"#a6adc8","subtext1":"#bac2de","surface0":"#313244","surface1":"#45475a","surface2":"#585b70","accent":"#89b4fa","link":"#89b4fa"},
+                "orchestrators": {}
+            }
+        }
+        """
+        struct PayloadExtractor<T: Decodable>: Decodable { let payload: T }
+        let snapshot = try JSONDecoder().decode(PayloadExtractor<SnapshotPayload>.self, from: Data(json.utf8))
+        #expect(snapshot.payload.pendingPermissions == nil)
+    }
+}
+
+// MARK: - AppStore Permission Tests
+
+@MainActor
+struct AppStorePermissionTests {
+    @Test func pendingPermissionsEmptyByDefault() {
+        let store = AppStore()
+        #expect(store.pendingPermissions.isEmpty)
+    }
+
+    @Test func pendingPermissionForAgent() {
+        let store = AppStore()
+        let futureDeadline = Int(Date().timeIntervalSince1970 * 1000) + 60_000
+        let perm = PermissionRequest(
+            id: "perm_001",
+            agentId: "agent_1",
+            toolName: "Bash",
+            toolInput: nil,
+            message: "Run tests",
+            deadline: futureDeadline
+        )
+        store.pendingPermissions["perm_001"] = perm
+
+        let found = store.pendingPermission(for: "agent_1")
+        #expect(found != nil)
+        #expect(found?.id == "perm_001")
+    }
+
+    @Test func pendingPermissionReturnsNilForWrongAgent() {
+        let store = AppStore()
+        let futureDeadline = Int(Date().timeIntervalSince1970 * 1000) + 60_000
+        let perm = PermissionRequest(
+            id: "perm_001",
+            agentId: "agent_1",
+            toolName: "Bash",
+            toolInput: nil,
+            message: nil,
+            deadline: futureDeadline
+        )
+        store.pendingPermissions["perm_001"] = perm
+
+        let found = store.pendingPermission(for: "agent_2")
+        #expect(found == nil)
+    }
+
+    @Test func expiredPermissionNotReturned() {
+        let store = AppStore()
+        let pastDeadline = Int(Date().timeIntervalSince1970 * 1000) - 1000
+        let perm = PermissionRequest(
+            id: "perm_expired",
+            agentId: "agent_1",
+            toolName: "Bash",
+            toolInput: nil,
+            message: nil,
+            deadline: pastDeadline
+        )
+        store.pendingPermissions["perm_expired"] = perm
+
+        let found = store.pendingPermission(for: "agent_1")
+        #expect(found == nil)
+    }
+
+    @Test func disconnectClearsPendingPermissions() {
+        let store = AppStore()
+        store.loadMockData()
+        let perm = PermissionRequest(
+            id: "perm_001",
+            agentId: "agent_1",
+            toolName: "Bash",
+            toolInput: nil,
+            message: nil,
+            deadline: 9999999999999
+        )
+        store.pendingPermissions["perm_001"] = perm
+        #expect(!store.pendingPermissions.isEmpty)
+        store.disconnect()
+        #expect(store.pendingPermissions.isEmpty)
+    }
+}

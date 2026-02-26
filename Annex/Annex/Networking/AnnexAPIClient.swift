@@ -201,6 +201,24 @@ final class AnnexAPIClient: Sendable {
         return try decode(SendMessageResponse.self, from: data)
     }
 
+    // MARK: - POST /api/v1/agents/{agentId}/permission-response
+
+    func respondToPermission(
+        agentId: String,
+        request: PermissionResponseRequest,
+        token: String
+    ) async throws(APIError) -> PermissionResponseResponse {
+        let url = try makeURL("/api/v1/agents/\(agentId)/permission-response")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONEncoder().encode(request)
+
+        let data = try await perform(req)
+        return try decode(PermissionResponseResponse.self, from: data)
+    }
+
     // MARK: - GET /api/v1/icons/agent/{agentId}
 
     func fetchAgentIcon(agentId: String, token: String) async -> Data? {

@@ -32,6 +32,7 @@ enum ConnectionState: Sendable {
     var agentsByProject: [String: [DurableAgent]] = [:]
     var quickAgentsByProject: [String: [QuickAgent]] = [:]
     var activityByAgent: [String: [HookEvent]] = [:]
+    var pendingPermissions: [String: PermissionRequest] = [:]  // keyed by requestId
     var ptyBufferByAgent: [String: String] = [:]
     var isPaired: Bool = false
     var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
@@ -105,6 +106,12 @@ enum ConnectionState: Sendable {
 
     func activity(for agentId: String) -> [HookEvent] {
         activityByAgent[agentId] ?? []
+    }
+
+    func pendingPermission(for agentId: String) -> PermissionRequest? {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        return pendingPermissions.values
+            .first { $0.agentId == agentId && $0.deadline > now }
     }
 
     func ptyBuffer(for agentId: String) -> String {
@@ -217,6 +224,13 @@ enum ConnectionState: Sendable {
             orchestrators = payload.orchestrators
             activityByAgent = [:]
             ptyBufferByAgent = [:]
+            // Populate pending permissions from snapshot
+            pendingPermissions = [:]
+            if let perms = payload.pendingPermissions {
+                for perm in perms {
+                    pendingPermissions[perm.id] = perm
+                }
+            }
             connectionState = .connected
             isPaired = true
             Task { await fetchIcons() }
@@ -300,6 +314,18 @@ enum ConnectionState: Sendable {
                     break
                 }
             }
+
+        case .permissionRequest(let payload):
+            print("[Annex] Permission request: agent=\(payload.agentId) tool=\(payload.toolName) requestId=\(payload.requestId)")
+            let perm = PermissionRequest(
+                id: payload.requestId,
+                agentId: payload.agentId,
+                toolName: payload.toolName,
+                toolInput: payload.toolInput,
+                message: payload.message,
+                deadline: payload.deadline
+            )
+            pendingPermissions[perm.id] = perm
 
         case .disconnected(let error):
             print("[Annex] WS disconnected: \(String(describing: error))")
@@ -448,6 +474,17 @@ enum ConnectionState: Sendable {
         _ = try await apiClient.sendMessage(agentId: agentId, request: request, token: token)
     }
 
+    func respondToPermission(agentId: String, requestId: String, allow: Bool) async throws {
+        guard let apiClient, let token else { return }
+        let request = PermissionResponseRequest(
+            requestId: requestId,
+            decision: allow ? "allow" : "deny"
+        )
+        _ = try await apiClient.respondToPermission(agentId: agentId, request: request, token: token)
+        // Remove from pending after successful response
+        pendingPermissions.removeValue(forKey: requestId)
+    }
+
     // MARK: - Icon Cache
 
     var agentIcons: [String: Data] = [:]
@@ -517,6 +554,7 @@ enum ConnectionState: Sendable {
         agentsByProject = [:]
         quickAgentsByProject = [:]
         activityByAgent = [:]
+        pendingPermissions = [:]
         ptyBufferByAgent = [:]
         agentIcons = [:]
         projectIcons = [:]
