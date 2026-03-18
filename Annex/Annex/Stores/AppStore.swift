@@ -379,6 +379,7 @@ enum ConnectionState: Sendable {
                 toolName: payload.toolName,
                 toolInput: payload.toolInput,
                 message: payload.message,
+                timeout: payload.timeout,
                 deadline: payload.deadline
             )
             // Remove any stale permission for this agent before adding new one
